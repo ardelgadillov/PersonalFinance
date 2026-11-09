@@ -1,0 +1,13 @@
+# Secrets and personal financial data — never commit
+.env
+data/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# IDE settings (PyCharm) - not part of the code
+.idea/

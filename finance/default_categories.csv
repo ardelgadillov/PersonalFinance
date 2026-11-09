@@ -1,0 +1,29 @@
+group,category,parent,empower_categories
+income,Paycheck,,Paychecks/Salary
+income,Interest & Dividends,,Interest; Dividends Received; Investment Income
+income,Other Income,,Other Income; Deposits; Consulting; Rental Income
+expense,Groceries,,Groceries
+expense,Restaurants,,Restaurants
+expense,Mortgages,,Rent; Mortgages
+expense,Home,,Home Improvement; Home Maintenance; Insurance
+expense,Utilities,,Utilities; Telephone; Cable/Satellite
+expense,Automotive,,Gasoline/Fuel; Automotive
+expense,Travel,,Travel
+expense,General Merchandise,,General Merchandise; Clothing/Shoes; Electronics; Office Supplies; Entertainment; Hobbies; Personal Care; Pets/Pet Care; Checks; Postage & Shipping; Other Expenses
+expense,Healthcare,,Healthcare/Medical
+expense,Online Services,,Online Services
+expense,Subscriptions,, Dues & Subscriptions
+expense,Taxes,,Taxes
+expense,Fees,,Service Charges/Fees
+expense,Education,,Education
+expense,Charitable Giving,,Gifts; Charitable Giving
+expense,ATM/Cash,,ATM/Cash
+expense,Loans,,Loans
+expense,Refunds,,Refunds & Reimbursements
+expense,Child/Dependent,,Child/Dependent Expenses
+expense,Apple/Target,,apple+target
+expense,Family,,Family
+transfer,Transfer,,Transfers; Savings
+transfer,Credit Card Payment,,Credit Card Payments
+transfer,Investment Contribution,,Retirement Contributions
+transfer,Investment Trade,,Securities Trades

@@ -1,0 +1,33 @@
+{
+  "errors": ["Connection to Fake Bank may need attention"],
+  "accounts": [
+    {
+      "org": {"domain": "fakebank.example", "sfin-url": "https://sfin.example/", "name": "Fake Bank"},
+      "id": "ACT-checking",
+      "name": "Everyday Checking",
+      "currency": "USD",
+      "balance": "1520.75",
+      "available-balance": "1500.00",
+      "balance-date": 1762700000,
+      "transactions": [
+        {"id": "T1", "posted": 1762600000, "amount": "-45.20", "description": "WHOLEFDS MKT 123", "payee": "Whole Foods", "memo": "", "transacted_at": 1762590000},
+        {"id": "T2", "posted": 1762500000, "amount": "2500.00", "description": "ACME CORP PAYROLL"},
+        {"id": "T3", "posted": 0, "amount": "-12.00", "description": "COFFEE SHOP", "pending": true}
+      ],
+      "holdings": []
+    },
+    {
+      "org": {"domain": "broker.example", "name": "Fake Broker"},
+      "id": "ACT-brokerage",
+      "name": "Individual Brokerage",
+      "currency": "USD",
+      "balance": "10250.00",
+      "balance-date": 1762700000,
+      "transactions": [],
+      "holdings": [
+        {"id": "H1", "created": 1700000000, "currency": "USD", "cost_basis": "8000.00", "description": "Vanguard Total Stock Market ETF", "market_value": "10000.00", "purchase_price": "200.00", "shares": "40", "symbol": "VTI"},
+        {"id": "H2", "currency": "USD", "description": "Cash", "market_value": "250.00", "shares": "250", "symbol": ""}
+      ]
+    }
+  ]
+}

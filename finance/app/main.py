@@ -72,7 +72,8 @@ def config_banner():
 
 
 def create_app() -> dash.Dash:
-    from finance.app.pages import placeholder, settings as settings_page  # noqa: F401 (registers callbacks)
+    from finance.app.pages import placeholder, settings as settings_page  # noqa: F401
+    from finance.app.pages import transactions as transactions_page  # noqa: F401 (registers callbacks)
 
     services.engine_for()  # create / migrate the database before the first request
     app = dash.Dash(
@@ -105,6 +106,8 @@ def create_app() -> dash.Dash:
         title = TITLES.get(path, "Not found")
         if path == "/settings":
             return settings_page.layout(), title
+        if path == "/transactions":
+            return transactions_page.layout(), title
         if path in placeholder.PAGES:
             return placeholder.layout(*placeholder.PAGES[path]), title
         return dbc.Alert(["Page not found. ", dcc.Link("Go to Net worth", href="/")], color="secondary"), title

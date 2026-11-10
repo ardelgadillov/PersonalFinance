@@ -70,7 +70,7 @@ finance/                     # run with `python -m finance ...`
   simplefin/client.py        # fetch + parse
   sync.py                    # windows, upserts, snapshots
   importers/empower.py
-  categorize.py  transfers.py  scheduler.py
+  categorize.py  transactions.py  transfers.py  scheduler.py
   app/
     app.py  layout.py
     pages/networth.py  cashflow.py  investments.py  transactions.py  settings.py
@@ -90,7 +90,7 @@ tests/                       # fixture JSON/CSV, no real data
 1. ✅ **Foundation**: requirements.txt, `.gitignore`, config, DB models, SimpleFIN client, `finance sync` CLI, tests with fixtures
 2. ✅ **Empower import**: CSV importer, account linking, category mapping, rule generation
 3. ✅ **Settings page + Sync button + sync on startup**
-4. **Transactions page**: rules, manual edits, transfer matching
+4. ✅ **Transactions page**: filterable editable list (category, tags, notes; bulk set/reset), rules editor with live preview, transfer pair suggestions (confirm / not a transfer / unpair)
 5. **Cash flow page**
 6. **Net worth page**
 7. **Investments page**

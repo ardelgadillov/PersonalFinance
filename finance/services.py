@@ -39,6 +39,39 @@ def session(settings: Settings | None = None) -> Session:
     return Session(engine_for(settings), expire_on_commit=False)
 
 
+def read(fn, *args, **kwargs):
+    """Run `fn(session, ...)` read-only, e.g. read(transactions.query, filter)."""
+    with session() as s:
+        return fn(s, *args, **kwargs)
+
+
+def write(fn, *args, **kwargs):
+    """Run `fn(session, ...)` and commit (rolls back if it raises)."""
+    with session() as s:
+        try:
+            out = fn(s, *args, **kwargs)
+        except Exception:
+            s.rollback()
+            raise
+        s.commit()
+        return out
+
+
+def category_choices(settings: Settings | None = None) -> list[dict]:
+    """[{id, name, group}] in display order."""
+    with session(settings) as s:
+        return [{"id": c.id, "name": c.name, "group": c.group}
+                for c in s.scalars(select(Category).order_by(Category.sort_order, Category.name))]
+
+
+def account_choices(settings: Settings | None = None) -> list[dict]:
+    """[{id, label}] for filters (hidden accounts last)."""
+    with session(settings) as s:
+        accts = s.scalars(select(Account).order_by(Account.hidden, Account.org_name, Account.name)).all()
+        return [{"id": a.id, "label": f"{a.label}" + (f" ({a.org_name})" if a.org_name else "")}
+                for a in accts]
+
+
 # --------------------------------------------------------------------------- time helpers
 def to_local(ts: dt.datetime | None, settings: Settings | None = None) -> dt.datetime | None:
     if ts is None:

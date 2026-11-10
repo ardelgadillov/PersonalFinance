@@ -22,6 +22,7 @@ NOISE_TOKENS = {
 MAX_KEY_TOKENS = 3
 
 
+@lru_cache(maxsize=65536)
 def normalize_description(text: str | None) -> str:
     """Uppercase, strip punctuation, reference numbers and noise words."""
     if not text:

@@ -173,3 +173,30 @@ body { background: var(--app-bg); color: var(--app-text); font-size: 14px; }
   .main { margin-left: 0; }
   .topbar, .content { padding-left: 16px; padding-right: 16px; }
 }
+
+/* Summary strip (Transactions) */
+.stat-strip { display: flex; flex-wrap: wrap; gap: 12px; }
+.stat-chip {
+  background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 10px;
+  padding: 10px 16px; min-width: 140px; box-shadow: var(--app-shadow);
+}
+.stat-chip .stat-value { font-size: 18px; margin-top: 2px; }
+.amount-neg { color: var(--app-negative); }
+.amount-pos { color: var(--app-positive); }
+
+/* Dash 4 core components (Dropdown, DatePickerRange) follow the app theme */
+html:root {
+  --Dash-Fill-Interactive-Strong: var(--app-accent);
+  --Dash-Fill-Interactive-Weak: var(--app-accent-soft);
+  --Dash-Fill-Inverse-Strong: var(--app-surface);
+  --Dash-Fill-Primary-Hover: var(--app-accent-soft);
+  --Dash-Fill-Primary-Active: var(--app-accent-soft);
+  --Dash-Fill-Disabled: var(--app-surface-2);
+  --Dash-Text-Primary: var(--app-text);
+  --Dash-Text-Strong: var(--app-text);
+  --Dash-Text-Weak: var(--app-muted);
+  --Dash-Text-Disabled: var(--app-muted);
+  --Dash-Stroke-Strong: var(--app-border);
+  --Dash-Stroke-Weak: var(--app-border);
+}
+.dash-dropdown, .dash-datepicker { font-size: 14px; }

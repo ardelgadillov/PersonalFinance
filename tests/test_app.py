@@ -91,3 +91,33 @@ def test_humanize_age():
     assert services.humanize_age(now - dt.timedelta(hours=3), now) == "3 h ago"
     assert services.humanize_age(now - dt.timedelta(days=5), now) == "5 days ago"
     assert services.safe_filename("") == "upload.csv"
+
+
+def test_transactions_page_callbacks(demo):
+    from finance.app.main import create_app
+    from finance.app.pages import transactions as page
+
+    create_app()
+    assert page.layout()
+    for tab in ("list", "transfers", "rules"):
+        assert page.render_tab(tab, 0)[0]
+    rows, summary, style = page.load_transactions(None, "all", None, None, ["DEMO-CHK"], None, 0)
+    assert rows and len(summary) == 5 and style == {"display": "none"}
+    assert page.load_transactions(None, "custom", "2026-10-01", "2026-10-31", None, None, 0)[2] == {}
+
+    cats = {c["name"]: c["id"] for c in services.category_choices()}
+    row = rows[0]
+    msg, update = page.save_cell([{"colId": "category", "value": "Travel", "data": row}])
+    assert update["update"][0]["category"] == "Travel" and update["update"][0]["how"] == "Manual"
+    msg, update = page.save_cell([{"colId": "note", "value": "hello", "data": row}])
+    assert update["update"][0]["note"] == "hello"
+
+    assert page.preview_rule("STARBUCKS", "description", "contains", cats["Travel"], None, True)
+    _, err, msg, refresh = page.save_rule(1, "", "description", "contains", cats["Travel"], None)
+    assert err is not None and refresh is page.no_update
+    is_open, err, msg, refresh = page.save_rule(1, "STARBUCKS", "description", "contains", cats["Travel"], None)
+    assert is_open is False and "saved" in str(msg)
+
+    suggestions = page._suggestion_rows()
+    assert suggestions and all(r["category"] for r in suggestions)
+

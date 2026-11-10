@@ -19,7 +19,10 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
 - `finance/simplefin/client.py` API client; `finance/sync.py` windowed sync + daily balance/holding snapshots.
 - `finance/importers/empower.py` CSV import: staging table `empower_rows` -> account linking -> dedupe vs SimpleFIN -> learned rules.
 - `finance/categories.py` category CRUD + Empower mapping; `finance/categorize.py` rule engine.
-- `finance/services.py` data access for the UI (no Dash imports; unit-tested). `finance/background.py` threaded sync manager.
+- `finance/transactions.py` listing/filters, manual edits, rules CRUD + preview; `finance/transfers.py` transfer pair
+  suggestions (opposite amounts, different accounts, <= 3 days), confirm / dismiss (`transfer_dismissals`) / unpair.
+- `finance/services.py` data access for the UI (no Dash imports; unit-tested). `services.read(fn, ...)` /
+  `services.write(fn, ...)` run a session-based function (write commits). `finance/background.py` threaded sync manager.
 - `finance/app/` Dash UI: `main.py` (sidebar shell, routing, sync polling, theme), `pages/*.py`, `components.py`, `assets/style.css`.
 - `finance/demo.py` deterministic simulated household + fake SimpleFIN client + fake Empower CSV.
 - `tests/` pytest; `tests/conftest.py` seeds categories from the frozen `tests/fixtures/categories.csv`.
@@ -28,6 +31,9 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
 - Amounts: negative = money out (SimpleFIN convention); Empower amounts are sign-detected on import.
 - Category precedence: `manual` > `empower` > `rule`. Syncs/imports/recategorization must never overwrite manual edits.
 - SimpleFIN only gives *current* balances/holdings; history comes from daily snapshots (`balance_snapshots`, `holding_snapshots`).
+- Transfer pairs: both rows' `transfer_pair_id` point at each other; `clean_pairs` drops links whose partner is gone.
+- Rules only touch transactions with `category_source` NULL/`rule`; learned rules (`origin=empower`) are rebuilt on
+  each Empower refresh, so users override them with their own rules (priority 100 < ~990), never by editing.
 - Empower rows for a linked account are used only before the first SimpleFIN transaction (cutoff); matches are not duplicated.
 - Categories live in the DB and are managed in Settings -> Categories. `finance/default_categories.csv` only seeds a NEW database.
 - No migration tool: `_add_missing_columns` in `db.py` adds new nullable columns; avoid renames/drops of columns.
@@ -41,12 +47,15 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
 - Left sidebar navigation, light/dark toggle (Bootstrap `data-bs-theme` + AG Grid `data-ag-theme-mode`), indigo accent.
 - No emojis anywhere in the UI (titles, headers, labels). Bootstrap Icons (`bi-*`) are fine.
 - Tables: dash-ag-grid 35 via `components.grid()`; mark editable columns with `components.editable()`; content in `components.panel()`.
-- Colors only via CSS variables in `assets/style.css` (`--app-*`) so both themes work.
+- Colors only via CSS variables in `assets/style.css` (`--app-*`) so both themes work. Dash 4 dcc components are
+  themed through their `--Dash-*` variables (mapped to `--app-*` on `html:root`).
 - Everything should be configurable in the app, not via external files.
 
 ## Gotchas
 - Components referenced as `State`/`Input` in a callback must always exist in the page layout (e.g. modal contents),
   otherwise Dash silently skips the callback.
+- Tabs rendered by a callback: every Input/State of a callback must live in the same tab (or at page level).
+  Shared state across tabs goes in page-level `dcc.Store`s (e.g. `txn-refresh`, `txn-selection`).
 - Callbacks with `allow_duplicate=True` get a hash suffix in their output id; HTTP probes must read ids from `/_dash-dependencies`.
 - When editing files with Python/heredoc scripts in Git Bash, `"\n"` inside replacement strings can become real newlines
   and break string literals; prefer the Edit tool for such lines. Always import-check (`python -c "import finance.cli"`).

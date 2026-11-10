@@ -34,5 +34,4 @@ PAGES = {
     "/": (6, "assets vs. liabilities over time, stacked by account type, with KPI cards."),
     "/cashflow": (5, "monthly income vs. expenses, savings rate, spending by category, Sankey."),
     "/investments": (7, "holdings with gain/loss, allocation, portfolio value over time."),
-    "/transactions": (4, "searchable table, category editing, rules, transfer matching."),
 }

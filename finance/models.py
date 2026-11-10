@@ -152,6 +152,15 @@ class Rule(Base):
     origin: Mapped[str | None] = mapped_column(String, default="user")  # user | empower (learned)
 
 
+class TransferDismissal(Base):
+    """A suggested transfer pair the user rejected (so it is not suggested again)."""
+
+    __tablename__ = "transfer_dismissals"
+
+    out_id: Mapped[int] = mapped_column(Integer, primary_key=True)  # transaction leaving an account
+    in_id: Mapped[int] = mapped_column(Integer, primary_key=True)  # transaction arriving in another
+
+
 class EmpowerRow(Base):
     """Raw row from an Empower transactions CSV export (staging table).
 

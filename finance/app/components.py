@@ -41,12 +41,13 @@ def grid(id_: str, column_defs: list[dict], row_data: list[dict], height: int = 
 
 def panel(title: str | None, *children, subtitle: str | None = None, actions=None) -> html.Div:
     head = None
-    if title or actions:
+    # `is not None`, not truthiness: a Dash component with no children has len() == 0.
+    if title is not None or actions is not None:
         head = html.Div([
             html.Div([html.Div(title, className="panel-title"),
-                      html.Div(subtitle, className="panel-subtitle") if subtitle else None],
+                      html.Div(subtitle, className="panel-subtitle") if subtitle is not None else None],
                      className="me-auto"),
-            html.Div(actions) if actions else None,
+            html.Div(actions) if actions is not None else None,
         ], className="d-flex align-items-start gap-2")
     return html.Div([head, *children], className="panel")
 

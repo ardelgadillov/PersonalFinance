@@ -70,7 +70,7 @@ finance/                     # run with `python -m finance ...`
   simplefin/client.py        # fetch + parse
   sync.py                    # windows, upserts, snapshots
   importers/empower.py
-  categorize.py  transactions.py  transfers.py  scheduler.py
+  categorize.py  transactions.py  transfers.py  cashflow.py  scheduler.py
   app/
     app.py  layout.py
     pages/networth.py  cashflow.py  investments.py  transactions.py  settings.py
@@ -91,7 +91,7 @@ tests/                       # fixture JSON/CSV, no real data
 2. ✅ **Empower import**: CSV importer, account linking, category mapping, rule generation
 3. ✅ **Settings page + Sync button + sync on startup**
 4. ✅ **Transactions page**: filterable editable list (category, tags, notes; bulk set/reset), rules editor with live preview, transfer pair suggestions (confirm / not a transfer / unpair)
-5. **Cash flow page**
+5. ✅ **Cash flow page**: KPIs (income, spending, net, savings rate, avg monthly spending), income vs spending by month with net line, spending by category (click for monthly trend), Sankey, top merchants; period + account filters
 6. **Net worth page**
 7. **Investments page**
 8. **Home Assistant add-on**: Dockerfile, `config.yaml`, ingress path prefix, `/data` volume, daily scheduler

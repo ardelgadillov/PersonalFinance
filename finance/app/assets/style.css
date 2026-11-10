@@ -200,3 +200,6 @@ html:root {
   --Dash-Stroke-Weak: var(--app-border);
 }
 .dash-dropdown, .dash-datepicker { font-size: 14px; }
+.stat-hint { color: var(--app-muted); font-size: 12px; margin-top: 2px; }
+.scroll-y { max-height: 460px; overflow-y: auto; overflow-x: hidden; }
+.js-plotly-plot .plotly .modebar { display: none; }

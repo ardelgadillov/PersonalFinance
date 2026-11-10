@@ -72,7 +72,7 @@ def config_banner():
 
 
 def create_app() -> dash.Dash:
-    from finance.app.pages import placeholder, settings as settings_page  # noqa: F401
+    from finance.app.pages import cashflow as cashflow_page, placeholder, settings as settings_page  # noqa: F401
     from finance.app.pages import transactions as transactions_page  # noqa: F401 (registers callbacks)
 
     services.engine_for()  # create / migrate the database before the first request
@@ -106,6 +106,8 @@ def create_app() -> dash.Dash:
         title = TITLES.get(path, "Not found")
         if path == "/settings":
             return settings_page.layout(), title
+        if path == "/cashflow":
+            return cashflow_page.layout(), title
         if path == "/transactions":
             return transactions_page.layout(), title
         if path in placeholder.PAGES:

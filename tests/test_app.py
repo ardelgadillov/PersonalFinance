@@ -121,3 +121,47 @@ def test_transactions_page_callbacks(demo):
     suggestions = page._suggestion_rows()
     assert suggestions and all(r["category"] for r in suggestions)
 
+
+def _ids(component) -> set[str]:
+    nodes = [component, *component._traverse()] if hasattr(component, "_traverse") else []
+    return {n.id for n in nodes if isinstance(getattr(n, "id", None), str)}
+
+
+def _callbacks(app) -> list[tuple[set[str], set[str], set[str]]]:
+    """(output ids, input ids, state ids) of every registered callback."""
+    from dash._callback import GLOBAL_CALLBACK_MAP
+
+    def ids(deps):
+        return {d["id"] for d in deps if isinstance(d["id"], str)}
+
+    return [({part.split(".", 1)[0] for part in key.strip(".").split("...")},
+             ids(cb.get("inputs", [])), ids(cb.get("state", [])))
+            for key, cb in {**GLOBAL_CALLBACK_MAP, **app.callback_map}.items()]
+
+
+def test_every_callback_id_exists_in_its_view(demo):
+    """A missing Output id makes Dash stop ALL callbacks on the page (seen on Cash flow); a missing State makes
+    a callback skip silently. Inputs may be absent (e.g. a grid shown only when there is data)."""
+    from finance.app.main import create_app
+    from finance.app.pages import cashflow, settings as settings_page, transactions
+
+    app = create_app()
+    shell = _ids(app.layout)
+    views = []  # (anchor ids, ids available when that view is on screen)
+    for page_layout, render, tabs in (
+        (cashflow.layout(), None, []),
+        (transactions.layout(), lambda t: transactions.render_tab(t, 0)[0], ["list", "transfers", "rules"]),
+        (settings_page.layout(), lambda t: settings_page.render_tab(t, 0),
+         ["accounts", "categories", "empower", "synclog"]),
+    ):
+        page = _ids(page_layout)
+        tab_ids = {t: _ids(render(t)) for t in tabs}
+        views.append((page, shell | page | set().union(*tab_ids.values())))
+        views += [(ids, shell | page | ids) for ids in tab_ids.values()]
+    for outputs, inputs, states in _callbacks(app):
+        for anchor, available in views:
+            if not (outputs | inputs | states) & anchor:
+                continue
+            assert outputs <= available, f"Output ids missing from layout: {sorted(outputs - available)}"
+            if inputs & available:
+                assert states <= available, f"State ids missing from layout: {sorted(states - available)}"

@@ -143,13 +143,14 @@ def test_every_callback_id_exists_in_its_view(demo):
     """A missing Output id makes Dash stop ALL callbacks on the page (seen on Cash flow); a missing State makes
     a callback skip silently. Inputs may be absent (e.g. a grid shown only when there is data)."""
     from finance.app.main import create_app
-    from finance.app.pages import cashflow, settings as settings_page, transactions
+    from finance.app.pages import cashflow, networth, settings as settings_page, transactions
 
     app = create_app()
     shell = _ids(app.layout)
     views = []  # (anchor ids, ids available when that view is on screen)
     for page_layout, render, tabs in (
         (cashflow.layout(), None, []),
+        (networth.layout(), None, []),
         (transactions.layout(), lambda t: transactions.render_tab(t, 0)[0], ["list", "transfers", "rules"]),
         (settings_page.layout(), lambda t: settings_page.render_tab(t, 0),
          ["accounts", "categories", "empower", "synclog"]),

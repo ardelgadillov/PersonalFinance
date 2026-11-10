@@ -92,6 +92,6 @@ tests/                       # fixture JSON/CSV, no real data
 3. ✅ **Settings page + Sync button + sync on startup**
 4. ✅ **Transactions page**: filterable editable list (category, tags, notes; bulk set/reset), rules editor with live preview, transfer pair suggestions (confirm / not a transfer / unpair)
 5. ✅ **Cash flow page**: KPIs (income, spending, net, savings rate, avg monthly spending), income vs spending by month with net line, spending by category (click for monthly trend), Sankey, top merchants; period + account filters
-6. **Net worth page**
+6. ✅ **Net worth page**: KPIs (net worth, assets, debts, change), stacked area by group (cash, investments, other assets above zero; credit cards, loans below) with net worth line, change by month, composition, accounts table with per-account history; balances carried over missed sync days until the account stops being seen; liabilities always count as debt
 7. **Investments page**
 8. **Home Assistant add-on**: Dockerfile, `config.yaml`, ingress path prefix, `/data` volume, daily scheduler

@@ -2,6 +2,8 @@
 
 Colors follow the data's job (validated categorical slots; both modes selected, not flipped):
 income = slot 1 (blue), spending = slot 2 (orange), savings = slot 3 (aqua).
+Net worth groups (`nw_*`, stacking order yellow/aqua/blue | orange/violet validated adjacent-pairs in both
+modes): cash blue, investments aqua, other assets yellow, credit cards orange, loans violet.
 Text, grid and axes use the same neutrals as the CSS `--app-*` variables.
 """
 from __future__ import annotations
@@ -13,11 +15,15 @@ THEMES = {
         "text": "#111827", "muted": "#6b7280", "grid": "#eef0f3", "axis": "#d1d5db", "surface": "#ffffff",
         "income": "#2a78d6", "spending": "#eb6834", "savings": "#1baf7a", "neutral": "#9ca3af",
         "accent": "#6366f1",
+        "nw_cash": "#2a78d6", "nw_investments": "#1baf7a", "nw_other": "#eda100", "nw_credit": "#eb6834",
+        "nw_loans": "#6250d6",
     },
     "dark": {
         "text": "#e5e7eb", "muted": "#9ca3af", "grid": "#232838", "axis": "#3a4152", "surface": "#171a23",
         "income": "#3987e5", "spending": "#d95926", "savings": "#199e70", "neutral": "#6b7280",
         "accent": "#818cf8",
+        "nw_cash": "#3987e5", "nw_investments": "#199e70", "nw_other": "#c98500", "nw_credit": "#d95926",
+        "nw_loans": "#9085e9",
     },
 }
 FONT = "Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"

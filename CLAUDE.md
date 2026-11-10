@@ -22,6 +22,7 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
 - `finance/transactions.py` listing/filters, manual edits, rules CRUD + preview; `finance/transfers.py` transfer pair
   suggestions (opposite amounts, different accounts, <= 3 days), confirm / dismiss (`transfer_dismissals`) / unpair.
 - `finance/cashflow.py` pandas cash flow analytics (monthly, by category, trend, merchants, Sankey).
+- `finance/networth.py` net worth from `balance_snapshots` (daily, by group, monthly change, account rows).
 - `finance/services.py` data access for the UI (no Dash imports; unit-tested). `services.read(fn, ...)` /
   `services.write(fn, ...)` run a session-based function (write commits). `finance/background.py` threaded sync manager.
 - `finance/app/` Dash UI: `main.py` (sidebar shell, routing, sync polling, theme), `pages/*.py`, `components.py`,
@@ -35,6 +36,9 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
 - SimpleFIN only gives *current* balances/holdings; history comes from daily snapshots (`balance_snapshots`, `holding_snapshots`).
 - Cash flow excludes transfer-group categories, confirmed transfer pairs and hidden accounts (unless selected);
   spending = -(expense amounts), so refunds reduce spending; uncategorized counts by sign.
+- Net worth: accounts with `include_in_networth` and not hidden (unless selected); balances carried forward
+  over missing days up to the account's `last_seen`; liability types count as -abs(balance); untyped accounts
+  are an asset or a debt by the sign of their latest balance.
 - Transfer pairs: both rows' `transfer_pair_id` point at each other; `clean_pairs` drops links whose partner is gone.
 - Rules only touch transactions with `category_source` NULL/`rule`; learned rules (`origin=empower`) are rebuilt on
   each Empower refresh, so users override them with their own rules (priority 100 < ~990), never by editing.

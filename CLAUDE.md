@@ -100,6 +100,8 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
   and break string literals; prefer the Edit tool for such lines. Always import-check (`python -c "import finance.cli"`).
 - Never read or print `.env` (contains the SimpleFIN access URL with credentials). `.env` and `data/` are gitignored;
   PyCharm may auto-stage new files, so check `git status` before committing.
+- Git workflow: commit straight to `main` (no feature branches) and push when asked. This solo project has no
+  PR/review step; still run the tests before committing.
 - Outbound HTTPS from Python on this machine goes through a TLS-inspecting proxy: Python 3.13's VERIFY_X509_STRICT
   rejects its CA. `benchmarks._SystemTrustAdapter` uses the Windows trust store and drops only that flag.
 - Run the app with `use_reloader=False` (already in `run()`): the reloader would start two background syncs.

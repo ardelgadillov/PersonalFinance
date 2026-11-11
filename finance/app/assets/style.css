@@ -1,42 +1,11 @@
-/* Personal Finance: light/dark theme with an indigo accent.
-   Theme is switched by setting data-bs-theme / data-ag-theme-mode on <html>. */
+/* Personal Finance structural styles. Theme is switched by setting
+   data-bs-theme / data-ag-theme-mode on <html>.
+   Colour values (the --app-* variables) are generated from finance/app/theme.py and
+   injected into the page <head>; this file only references them via var(--app-*). */
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
-:root {
-  --app-bg: #f5f6fa;
-  --app-surface: #ffffff;
-  --app-surface-2: #f9fafb;
-  --app-border: #e5e7eb;
-  --app-text: #111827;
-  --app-muted: #6b7280;
-  --app-accent: #6366f1;
-  --app-accent-hover: #4f46e5;
-  --app-accent-soft: rgba(99, 102, 241, 0.10);
-  --app-accent-text: #4338ca;
-  --app-positive: #059669;
-  --app-negative: #dc2626;
-  --app-warning-soft: rgba(245, 158, 11, 0.14);
-  --app-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
-  --sidebar-width: 232px;
-}
-
-[data-bs-theme="dark"] {
-  --app-bg: #0f1117;
-  --app-surface: #171a23;
-  --app-surface-2: #1d2130;
-  --app-border: #2a2f3d;
-  --app-text: #e5e7eb;
-  --app-muted: #9ca3af;
-  --app-accent: #818cf8;
-  --app-accent-hover: #a5b4fc;
-  --app-accent-soft: rgba(129, 140, 248, 0.14);
-  --app-accent-text: #c7d2fe;
-  --app-positive: #34d399;
-  --app-negative: #f87171;
-  --app-warning-soft: rgba(245, 158, 11, 0.18);
-  --app-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
+:root { --sidebar-width: 232px; }
 
 /* ---- Bootstrap overrides ------------------------------------------------ */
 :root, [data-bs-theme="light"], [data-bs-theme="dark"] {
@@ -46,9 +15,9 @@
   --bs-secondary-color: var(--app-muted);
   --bs-border-color: var(--app-border);
   --bs-primary: var(--app-accent);
-  --bs-primary-rgb: 99, 102, 241;
+  --bs-primary-rgb: var(--app-accent-rgb);
   --bs-link-color: var(--app-accent);
-  --bs-link-color-rgb: 99, 102, 241;
+  --bs-link-color-rgb: var(--app-accent-rgb);
   --bs-link-hover-color: var(--app-accent-hover);
   --bs-card-bg: var(--app-surface);
   --bs-tertiary-bg: var(--app-surface-2);
@@ -66,8 +35,11 @@ body { background: var(--app-bg); color: var(--app-text); font-size: 14px; }
   --bs-btn-active-border-color: var(--app-accent-hover);
   --bs-btn-disabled-bg: var(--app-accent);
   --bs-btn-disabled-border-color: var(--app-accent);
+  --bs-btn-color: var(--app-on-accent);
+  --bs-btn-hover-color: var(--app-on-accent);
+  --bs-btn-active-color: var(--app-on-accent);
+  --bs-btn-disabled-color: var(--app-on-accent);
 }
-[data-bs-theme="dark"] .btn-primary { --bs-btn-color: #0f1117; --bs-btn-hover-color: #0f1117; }
 .btn-outline-primary {
   --bs-btn-color: var(--app-accent);
   --bs-btn-border-color: var(--app-accent);
@@ -113,9 +85,8 @@ body { background: var(--app-bg); color: var(--app-text); font-size: 14px; }
 
 .demo-pill {
   display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase;
-  padding: 3px 8px; border-radius: 999px; background: var(--app-warning-soft); color: #b45309; margin-bottom: 10px;
+  padding: 3px 8px; border-radius: 999px; background: var(--app-warning-soft); color: var(--app-demo-text); margin-bottom: 10px;
 }
-[data-bs-theme="dark"] .demo-pill { color: #fbbf24; }
 
 /* ---- Content blocks --------------------------------------------------------- */
 .panel {
@@ -203,3 +174,12 @@ html:root {
 .stat-hint { color: var(--app-muted); font-size: 12px; margin-top: 2px; }
 .scroll-y { max-height: 460px; overflow-y: auto; overflow-x: hidden; }
 .js-plotly-plot .plotly .modebar { display: none; }
+.focus-chip {
+  display: inline-flex; align-items: center; font-size: 13px; font-weight: 500; color: var(--app-accent-text);
+  background: var(--app-accent-soft); border-radius: 999px; padding: 3px 4px 3px 12px;
+}
+.focus-chip .btn-link { color: var(--app-accent-text); text-decoration: none; font-size: 13px; }
+.stat-strip.compact { gap: 8px; }
+.stat-strip.compact .stat-chip { padding: 6px 12px; min-width: 0; box-shadow: none; }
+.stat-strip.compact .stat-label { font-size: 11px; }
+.stat-strip.compact .stat-value { font-size: 15px; margin-top: 0; }

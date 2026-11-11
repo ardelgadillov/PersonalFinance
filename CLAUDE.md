@@ -23,11 +23,23 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
   suggestions (opposite amounts, different accounts, <= 3 days), confirm / dismiss (`transfer_dismissals`) / unpair.
 - `finance/cashflow.py` pandas cash flow analytics (monthly, by category, trend, merchants, Sankey).
 - `finance/networth.py` net worth from `balance_snapshots` (daily, by group, monthly change, account rows).
+- `finance/investments.py` holdings from `holding_snapshots` (gain, weight, price change, allocation, cost basis,
+  time-weighted return). `finance/benchmarks.py` benchmark closes (Yahoo chart API, cached in `benchmark_prices`;
+  fake deterministic series in demo mode; also dividend-adjusted fund closes in `fund_prices`).
+- `finance/optimizer.py` Markowitz (mirrors the QuiraData notebook: log returns x 252, SLSQP, long only) + cap per
+  fund, frontier point, walk-forward test, fund-list parsing. `finance/fundmenu.py` per-account fund menus
+  (`fund_menu`) and the current mix from the latest holdings. Page: `finance/app/pages/optimizer.py`.
 - `finance/services.py` data access for the UI (no Dash imports; unit-tested). `services.read(fn, ...)` /
   `services.write(fn, ...)` run a session-based function (write commits). `finance/background.py` threaded sync manager.
 - `finance/app/` Dash UI: `main.py` (sidebar shell, routing, sync polling, theme), `pages/*.py`, `components.py`,
   `charts.py` (Plotly theme: `base_layout(theme)`, `colors(theme)`), `assets/style.css`.
 - `finance/demo.py` deterministic simulated household + fake SimpleFIN client + fake Empower CSV.
+- `finance/addon.py` Home Assistant add-on glue (active only when `SUPERVISOR_TOKEN` is set): reads
+  `/data/options.json` into env vars, and this add-on's ingress base path from the Supervisor API (becomes
+  Dash `requests_pathname_prefix`; routes stay at `/`). Root `Dockerfile`/`config.yaml`/`build.yaml`/`run.sh`
+  package it as a local HA add-on (`python:3.13-slim` base); `SyncManager.schedule_daily` runs the daily sync
+  (`FINANCE_DAILY_SYNC_HOUR`). Install steps: `INSTALL_HOMEASSISTANT.md`. No Docker in dev - build/ingress
+  verified only in a live HA instance.
 - `tests/` pytest; `tests/conftest.py` seeds categories from the frozen `tests/fixtures/categories.csv`.
 
 ## Data rules (keep these invariants)
@@ -39,6 +51,14 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
 - Net worth: accounts with `include_in_networth` and not hidden (unless selected); balances carried forward
   over missing days up to the account's `last_seen`; liability types count as -abs(balance); untyped accounts
   are an asset or a debt by the sign of their latest balance.
+- Investments: accounts of an investment type or with holding snapshots (hidden unless selected); value over time
+  = account balances (incl. cash); holdings = latest snapshot <= end of range per account; gain only where a cost
+  basis is reported; account colors come from `charts.THEMES[...]['series']` by a slot fixed across filters.
+  Returns are price returns (no dividends) chained on the prior day's shares, so deposits/buys are not gains;
+  benchmarks use the same basis. A benchmark is re-fetched at most every 6 h and only when the cache lacks the range.
+- Optimizer: in-sample = last N years of the funds' common history; walk-forward re-optimizes every 12 months
+  on the trailing training window only (never future prices); the current mix only counts holdings that are in
+  the fund menu. Funds without a ticker cannot be priced and are skipped.
 - Transfer pairs: both rows' `transfer_pair_id` point at each other; `clean_pairs` drops links whose partner is gone.
 - Rules only touch transactions with `category_source` NULL/`rule`; learned rules (`origin=empower`) are rebuilt on
   each Empower refresh, so users override them with their own rules (priority 100 < ~990), never by editing.
@@ -58,8 +78,11 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
 - Charts: figures are built server-side with `Input("theme", "data")` so they re-render on the theme toggle.
   Data colors are fixed by meaning (income blue, spending orange, savings aqua; validated for color-blind safety
   in both modes) and live in `charts.THEMES`. One y-axis per chart; legend for 2+ series.
-- Colors only via CSS variables in `assets/style.css` (`--app-*`) so both themes work. Dash 4 dcc components are
-  themed through their `--Dash-*` variables (mapped to `--app-*` on `html:root`).
+- All colors are defined once in `finance/app/theme.py` (`THEMES`: per-theme `ui` + `chart` tokens). To add or
+  restyle a theme, edit that dict only. `theme.css()` generates the `--app-*` CSS variable blocks (injected into
+  the page `<head>` by `main.py`), and `charts.THEMES` is derived from the same source. `assets/style.css` is
+  structural only and just references `var(--app-*)`; never hardcode a color there or in a page. The dark theme is
+  One Dark (Atom) inspired. Dash 4 dcc components are themed through their `--Dash-*` variables (mapped to `--app-*`).
 - Everything should be configurable in the app, not via external files.
 
 ## Gotchas
@@ -77,4 +100,6 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
   and break string literals; prefer the Edit tool for such lines. Always import-check (`python -c "import finance.cli"`).
 - Never read or print `.env` (contains the SimpleFIN access URL with credentials). `.env` and `data/` are gitignored;
   PyCharm may auto-stage new files, so check `git status` before committing.
+- Outbound HTTPS from Python on this machine goes through a TLS-inspecting proxy: Python 3.13's VERIFY_X509_STRICT
+  rejects its CA. `benchmarks._SystemTrustAdapter` uses the Windows trust store and drops only that flag.
 - Run the app with `use_reloader=False` (already in `run()`): the reloader would start two background syncs.

@@ -68,12 +68,10 @@ def test_upload_link_and_categories(demo):
 
 def test_all_routes_and_tabs_render(demo):
     from finance.app.main import create_app
-    from finance.app.pages import placeholder, settings as settings_page
+    from finance.app.pages import settings as settings_page
 
     app = create_app()
     assert app.layout is not None
-    for path, args in placeholder.PAGES.items():
-        assert placeholder.layout(*args)
     settings_page.render_tab("categories", 0)
     for tab in ("accounts", "empower", "categories", "synclog"):
         assert settings_page.render_tab(tab, 0)
@@ -143,7 +141,7 @@ def test_every_callback_id_exists_in_its_view(demo):
     """A missing Output id makes Dash stop ALL callbacks on the page (seen on Cash flow); a missing State makes
     a callback skip silently. Inputs may be absent (e.g. a grid shown only when there is data)."""
     from finance.app.main import create_app
-    from finance.app.pages import cashflow, networth, settings as settings_page, transactions
+    from finance.app.pages import cashflow, investments, networth, optimizer, settings as settings_page, transactions
 
     app = create_app()
     shell = _ids(app.layout)
@@ -151,6 +149,8 @@ def test_every_callback_id_exists_in_its_view(demo):
     for page_layout, render, tabs in (
         (cashflow.layout(), None, []),
         (networth.layout(), None, []),
+        (investments.layout(), None, []),
+        (optimizer.layout(), None, []),
         (transactions.layout(), lambda t: transactions.render_tab(t, 0)[0], ["list", "transfers", "rules"]),
         (settings_page.layout(), lambda t: settings_page.render_tab(t, 0),
          ["accounts", "categories", "empower", "synclog"]),

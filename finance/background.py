@@ -30,6 +30,7 @@ class SyncManager:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self.state = SyncState()
+        self._scheduler = None  # APScheduler BackgroundScheduler, created on first schedule_daily
 
     def can_sync(self, settings: Settings | None = None) -> tuple[bool, str]:
         settings = settings or get_settings()
@@ -73,6 +74,30 @@ class SyncManager:
         if last and last.finished_at and utcnow() - last.finished_at < dt.timedelta(hours=max_age):
             return False
         return self.start(trigger="startup", settings=settings)
+
+    def schedule_daily(self, hour: int, minute: int = 0, settings: Settings | None = None):
+        """Run a sync once a day at ``hour``:``minute`` (local time) via APScheduler.
+
+        Used by the Home Assistant add-on. SimpleFIN allows only ~24 requests/day per
+        connection, so once daily is safe. Returns the scheduler, or ``None`` if syncing is
+        not possible (no credentials). Replaces any previously scheduled daily job.
+        """
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        settings = settings or get_settings()
+        ok, reason = self.can_sync(settings)
+        if not ok:
+            log.warning("Daily sync not scheduled: %s", reason)
+            return None
+        if self._scheduler is None:
+            self._scheduler = BackgroundScheduler(timezone=settings.timezone, daemon=True)
+            self._scheduler.start()
+        self._scheduler.add_job(
+            lambda: self.start(trigger="scheduled", settings=settings),
+            trigger="cron", hour=hour, minute=minute, id="daily-sync", replace_existing=True,
+        )
+        log.info("Daily sync scheduled for %02d:%02d %s", hour, minute, settings.timezone)
+        return self._scheduler
 
 
 sync_manager = SyncManager()

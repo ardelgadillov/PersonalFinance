@@ -93,5 +93,11 @@ tests/                       # fixture JSON/CSV, no real data
 4. ✅ **Transactions page**: filterable editable list (category, tags, notes; bulk set/reset), rules editor with live preview, transfer pair suggestions (confirm / not a transfer / unpair)
 5. ✅ **Cash flow page**: KPIs (income, spending, net, savings rate, avg monthly spending), income vs spending by month with net line, spending by category (click for monthly trend), Sankey, top merchants; period + account filters
 6. ✅ **Net worth page**: KPIs (net worth, assets, debts, change), stacked area by group (cash, investments, other assets above zero; credit cards, loans below) with net worth line, change by month, composition, accounts table with per-account history; balances carried over missed sync days until the account stops being seen; liabilities always count as debt
-7. **Investments page**
-8. **Home Assistant add-on**: Dockerfile, `config.yaml`, ingress path prefix, `/data` volume, daily scheduler
+7. ✅ **Investments page**: KPIs (portfolio value, cost basis, unrealized gain, change), value over time stacked by account with a cost basis line, allocation by holding or account (click a holding to filter the page to it, an account to filter by it), performance vs a benchmark (S&P 500 by default; portfolio, selected holding, benchmark as time-weighted price returns), holdings table (gain, weight, price change that ignores deposits), per-holding history
+7b. ✅ **Optimizer page**: per-account fund menu (CSV upload, paste, add current holdings), Markowitz max Sharpe / min variance / frontier slider with a cap per fund and risk-free rate, current mix on the frontier, in-sample backtest and walk-forward (out-of-sample) test vs the current mix
+8. ✅ **Home Assistant add-on**: root `Dockerfile` / `config.yaml` / `build.yaml` / `run.sh` (local add-on,
+   Debian `python:3.13-slim` base), `finance/addon.py` reads `/data/options.json` into the env and the
+   ingress base path from the Supervisor API (becomes Dash `requests_pathname_prefix`; routes stay at `/`),
+   `/data` volume via `FINANCE_DATA_DIR`, daily sync via `SyncManager.schedule_daily` (APScheduler,
+   `FINANCE_DAILY_SYNC_HOUR`). Install steps in `INSTALL_HOMEASSISTANT.md`. Image build + ingress still to be
+   verified in a live HA instance (no Docker/Supervisor available in dev).

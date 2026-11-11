@@ -11,7 +11,7 @@ from dash import Input, Output, callback, dcc, html
 from finance import networth as nw
 from finance import services
 from finance import transactions as tx
-from finance.app.charts import CONFIG, base_layout, colors, empty_figure, rgba
+from finance.app.charts import CONFIG, base_layout, colors, empty_figure, glow, rgba
 from finance.app.components import grid, money_col, panel
 
 PERIODS = ["30d", "90d", "ytd", "12m", "last_year", "24m", "all", "custom"]
@@ -115,6 +115,7 @@ def history_figure(groups: pd.DataFrame, theme) -> go.Figure:
     fig.update_layout(**layout)
     fig.update_xaxes(hoverformat="%a %b %d, %Y")
     fig.update_yaxes(tickprefix="$", tickformat="~s")
+    glow(fig, theme)  # bloom on the net-worth line and the cumulative edges of the stacked bands
     return fig
 
 
@@ -131,6 +132,7 @@ def monthly_figure(m: pd.DataFrame, theme) -> go.Figure:
     step = 1 if len(m) <= 8 else 2 if len(m) <= 16 else 3 if len(m) <= 30 else 6
     fig.update_xaxes(tickformat="%b '%y", dtick=f"M{step}", tickangle=0)
     fig.update_yaxes(tickprefix="$", tickformat="~s")
+    glow(fig, theme)
     return fig
 
 
@@ -154,6 +156,7 @@ def composition_figure(groups: pd.DataFrame, theme) -> go.Figure:
                                     margin={"l": 8, "r": 70, "t": 8, "b": 8}))
     fig.update_yaxes(autorange="reversed", showgrid=False, zeroline=False, tickfont={"color": c["text"]})
     fig.update_xaxes(showgrid=True, tickprefix="$", tickformat="~s", zeroline=True)
+    glow(fig, theme)
     return fig
 
 
@@ -166,6 +169,7 @@ def account_figure(series: pd.Series | None, label: str, group: str, theme) -> g
                                hovertemplate="%{x|%a %b %d, %Y}<br>%{y:$,.0f}<extra></extra>"))
     fig.update_layout(**base_layout(theme, height=300, showlegend=False, hovermode="x"))
     fig.update_yaxes(tickprefix="$", tickformat="~s")
+    glow(fig, theme, underfill=True)
     return fig
 
 

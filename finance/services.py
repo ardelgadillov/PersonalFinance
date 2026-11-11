@@ -385,16 +385,3 @@ def map_empower_category(empower_category: str, category_name: str | None,
         s.commit()
     target = category_name or "(not mapped)"
     return f"Empower '{empower_category}' now maps to {target}; transactions recategorized."
-
-
-# --------------------------------------------------------------------------- summary (placeholder pages)
-def overview(settings: Settings | None = None) -> dict:
-    with session(settings) as s:
-        return {
-            "accounts": s.scalar(select(func.count()).select_from(Account)) or 0,
-            "transactions": s.scalar(select(func.count()).select_from(Transaction)) or 0,
-            "first_date": s.scalar(select(func.min(Transaction.date))),
-            "last_date": s.scalar(select(func.max(Transaction.date))),
-            "uncategorized": s.scalar(select(func.count()).select_from(Transaction)
-                                      .where(Transaction.category_id.is_(None))) or 0,
-        }

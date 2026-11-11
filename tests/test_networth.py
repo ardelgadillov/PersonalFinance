@@ -108,7 +108,7 @@ def test_page_callbacks(demo):
     for theme in ("light", "dark"):
         kpis, hist, subtitle, monthly, comp, rows, dates_style = page.update("12m", None, None, None, theme, 0)
         assert len(kpis) == 4 and dates_style == {"display": "none"}
-        names = [t.name for t in hist.data]
+        names = [t.name for t in hist.data if t.showlegend is not False]  # skip glow underlays/edges
         assert names[-1] == "Net worth" and "Cash" in names and "Loans and other debt" in names
         assert monthly.data and comp.data and rows
         fig, title = page.update_account([rows[1]], rows, "12m", None, None, theme, 0)

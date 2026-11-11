@@ -92,6 +92,39 @@ class HoldingSnapshot(Base):
     purchase_price: Mapped[float | None] = mapped_column(Float)
 
 
+class BenchmarkPrice(Base):
+    """Daily close of a benchmark (e.g. SPY), cached from the price provider."""
+
+    __tablename__ = "benchmark_prices"
+
+    symbol: Mapped[str] = mapped_column(String, primary_key=True)
+    date: Mapped[dt.date] = mapped_column(Date, primary_key=True)
+    close: Mapped[float] = mapped_column(Float)
+
+
+class FundPrice(Base):
+    """Daily dividend-adjusted close of a fund (total return basis), cached for the optimizer."""
+
+    __tablename__ = "fund_prices"
+
+    symbol: Mapped[str] = mapped_column(String, primary_key=True)
+    date: Mapped[dt.date] = mapped_column(Date, primary_key=True)
+    adj_close: Mapped[float] = mapped_column(Float)
+
+
+class FundMenuItem(Base):
+    """A fund the account's plan (401k, HSA, ...) lets you invest in."""
+
+    __tablename__ = "fund_menu"
+    __table_args__ = (UniqueConstraint("account_id", "symbol"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[str] = mapped_column(ForeignKey("accounts.id"), index=True)
+    symbol: Mapped[str] = mapped_column(String)
+    name: Mapped[str | None] = mapped_column(String)
+    added_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Category(Base):
     __tablename__ = "categories"
 

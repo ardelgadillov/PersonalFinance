@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import dash
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State, ctx, dcc, html, no_update
 
-from finance import services
+from finance import addon, services
+from finance.app import theme
 from finance.background import sync_manager
 from finance.config import get_settings
 
@@ -18,6 +20,7 @@ NAV = [
     ("/", "Net worth", "bi-graph-up"),
     ("/cashflow", "Cash flow", "bi-arrow-left-right"),
     ("/investments", "Investments", "bi-pie-chart"),
+    ("/optimizer", "Optimizer", "bi-sliders"),
     ("/transactions", "Transactions", "bi-list-ul"),
     ("/settings", "Settings", "bi-gear"),
 ]
@@ -72,21 +75,44 @@ def config_banner():
 
 
 def create_app() -> dash.Dash:
-    from finance.app.pages import cashflow as cashflow_page, networth as networth_page, placeholder  # noqa: F401
+    from finance.app.pages import cashflow as cashflow_page, investments as investments_page  # noqa: F401
+    from finance.app.pages import networth as networth_page, optimizer as optimizer_page  # noqa: F401
     from finance.app.pages import settings as settings_page, transactions as transactions_page  # noqa: F401
 
     services.engine_for()  # create / migrate the database before the first request
+    # Behind Home Assistant ingress the browser reaches us under a dynamic path prefix; Dash
+    # serves routes at '/' (HA strips the prefix) but must emit asset/callback URLs under it.
+    prefix = addon.ingress_prefix() if addon.in_addon() else None
+    path_kwargs = {"routes_pathname_prefix": "/", "requests_pathname_prefix": prefix} if prefix else {}
     app = dash.Dash(
         __name__,
         title="Personal Finance" + (" (demo)" if get_settings().demo else ""),
         external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.BOOTSTRAP],
         suppress_callback_exceptions=True,
         update_title=None,
+        **path_kwargs,
     )
+    # Theme colour variables are generated from finance/app/theme.py and injected here, so
+    # assets/style.css only references var(--app-*). The block loads after {%css%} (the
+    # assets) so the variable definitions are in place for the structural rules.
+    app.index_string = """<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <style id="app-theme">__THEME_CSS__</style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>{%config%}{%scripts%}{%renderer%}</footer>
+    </body>
+</html>""".replace("__THEME_CSS__", theme.css())
     app.layout = html.Div([
         dcc.Location(id="url"),
         dcc.Store(id="sync-version", data=sync_manager.state.version),
-        dcc.Store(id="theme", data="light"),
+        dcc.Store(id="theme", data=theme.DEFAULT_THEME),
         dcc.Interval(id="sync-poll", interval=POLL_SLOW_MS),
         sidebar(),
         html.Div([
@@ -112,8 +138,10 @@ def create_app() -> dash.Dash:
             return cashflow_page.layout(), title
         if path == "/transactions":
             return transactions_page.layout(), title
-        if path in placeholder.PAGES:
-            return placeholder.layout(*placeholder.PAGES[path]), title
+        if path == "/investments":
+            return investments_page.layout(), title
+        if path == "/optimizer":
+            return optimizer_page.layout(), title
         return dbc.Alert(["Page not found. ", dcc.Link("Go to Net worth", href="/")], color="secondary"), title
 
     @app.callback(
@@ -159,6 +187,10 @@ def run(host: str = "127.0.0.1", port: int = 8050, debug: bool = False, startup_
         if sync_manager.start_if_stale():
             log.warning("Last sync is old: started a background sync")
     settings = get_settings()
+    # Daily background sync (used by the HA add-on; FINANCE_DAILY_SYNC_HOUR is set from its options).
+    hour = os.getenv("FINANCE_DAILY_SYNC_HOUR", "").strip()
+    if hour:
+        sync_manager.schedule_daily(int(hour), settings=settings)
     print(f"Personal Finance running at http://{host}:{port}  (data: {settings.data_dir}"
           f"{', DEMO' if settings.demo else ''})")
     app.run(host=host, port=port, debug=debug, use_reloader=False)

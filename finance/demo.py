@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from finance.config import Settings
 from finance.models import Account, BalanceSnapshot, HoldingSnapshot
+from finance.fundmenu import add_funds
 from finance.simplefin.client import SFResponse, parse_accounts_response
 
 ANCHOR = dt.date(2024, 1, 1)
@@ -460,4 +461,31 @@ def build_demo(settings: Settings, reset: bool = False, today: dt.date | None = 
 
     csv_path = settings.import_dir / "empower_transactions.csv"
     n_csv = write_empower_csv(csv_path, world)
-    return {"sync": result, "csv_path": csv_path, "csv_rows": n_csv, "db_path": settings.db_path}
+    menu_path = write_fund_menu_csv(settings.import_dir / "fund_menu_401k.csv")
+    with Session(engine) as s:  # the 401(k) menu is pre-loaded; the CSV is there to try the upload
+        add_funds(s, "DEMO-401K", PLAN_MENU[:-1])
+        s.commit()
+    return {"sync": result, "csv_path": csv_path, "csv_rows": n_csv, "db_path": settings.db_path,
+            "fund_menu_path": menu_path}
+
+
+# The funds the demo 401(k) plan offers (Vanguard-style lineup). Prices come from benchmarks.fake_adjusted.
+PLAN_MENU = [
+    ("VFIFX", "Vanguard Target Retirement 2050 Fund"),
+    ("VFIAX", "Vanguard 500 Index Fund Admiral"),
+    ("VSMAX", "Vanguard Small-Cap Index Fund Admiral"),
+    ("VTIAX", "Vanguard Total International Stock Index Admiral"),
+    ("VBTLX", "Vanguard Total Bond Market Index Admiral"),
+    ("VGSLX", "Vanguard Real Estate Index Fund Admiral"),
+    ("VTAPX", "Vanguard Short-Term Inflation-Protected Securities Index Admiral"),
+]
+
+
+def write_fund_menu_csv(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["Ticker", "Fund name"])
+        w.writerows(PLAN_MENU)
+        w.writerow(["", "Stable Value Fund (no ticker)"])
+    return path

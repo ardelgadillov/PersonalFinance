@@ -146,8 +146,11 @@ def cmd_categories(_: argparse.Namespace) -> int:
 
 
 def cmd_app(args: argparse.Namespace) -> int:
+    from finance import addon
     from finance.app.main import run
 
+    if addon.in_addon():  # Home Assistant add-on: read /data/options.json into the environment
+        addon.apply_options()
     run(host=args.host, port=args.port, debug=args.debug, startup_sync=not args.no_sync)
     return 0
 

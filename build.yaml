@@ -1,0 +1,7 @@
+# Base image per architecture for the Home Assistant add-on builder.
+# python:3.13-slim is Debian-based, so pandas/numpy/scipy/plotly install from prebuilt
+# wheels (an Alpine/musl base would try to compile them and is far slower / can fail).
+build_from:
+  aarch64: python:3.13-slim
+  amd64: python:3.13-slim
+  armv7: python:3.13-slim

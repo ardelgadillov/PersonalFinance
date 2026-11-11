@@ -11,7 +11,7 @@ from dash import Input, Output, State, callback, dcc, html, no_update
 from finance import cashflow as cf
 from finance import services
 from finance import transactions as tx
-from finance.app.charts import CONFIG, base_layout, colors, empty_figure, rgba
+from finance.app.charts import CONFIG, base_layout, colors, empty_figure, glow, rgba
 from finance.app.components import grid, money_col, panel
 
 PERIODS = ["month", "12m", "ytd", "last_year", "24m", "all", "custom"]
@@ -102,6 +102,7 @@ def monthly_figure(m, theme) -> go.Figure:
                                     hovermode="x unified"))
     fig.update_xaxes(tickformat="%b %Y", dtick="M1" if len(m) <= 14 else "M3", hoverformat="%B %Y")
     fig.update_yaxes(tickprefix="$", tickformat=",.0f")
+    glow(fig, theme)  # bloom on the income/spending bars and the Net line
     return fig
 
 
@@ -124,6 +125,7 @@ def category_figure(cats, theme) -> go.Figure:
                                     margin={"l": 8, "r": 90, "t": 8, "b": 8}))
     fig.update_yaxes(autorange="reversed", showgrid=False, zeroline=False, tickfont={"color": c["text"]})
     fig.update_xaxes(showgrid=True, tickprefix="$", tickformat="~s", zeroline=True)
+    glow(fig, theme)
     return fig
 
 
@@ -147,6 +149,7 @@ def trend_figure(trend, category: str | None, kind: str, theme, daily: bool = Fa
         step = 1 if len(trend) <= 6 else 2 if len(trend) <= 14 else 3 if len(trend) <= 30 else 6
         fig.update_xaxes(tickformat="%b '%y", dtick=f"M{step}", tickangle=0)
     fig.update_yaxes(tickprefix="$", tickformat=",.0f")
+    glow(fig, theme)
     return fig
 
 
@@ -178,6 +181,7 @@ def daily_figure(cur, prev, today: dt.date, month_end: dt.date, theme) -> go.Fig
                             pd.Timestamp(month_end) + pd.Timedelta(hours=12)],
                      tickformat="%b %d", dtick=2 * 86400000, hoverformat="%a %b %d")
     fig.update_yaxes(tickprefix="$", tickformat=",.0f")
+    glow(fig, theme)  # bloom on the income/spending bars and the running-net lines
     return fig
 
 

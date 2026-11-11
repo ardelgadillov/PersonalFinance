@@ -134,7 +134,7 @@ def test_daily_and_this_month_view(demo):
     out = page.update("month", None, None, None, "dark", 0, None)
     fig, title = out[1], out[9]
     assert title == "Income and spending by day"
-    names = [t.name for t in fig.data]
+    names = [t.name for t in fig.data if t.showlegend is not False]  # skip glow_lines underlays
     assert names[:2] == ["Income", "Spending"] and any(n.startswith("Net so far") for n in names[2:])
     assert "per day" in str(out[0][-1])
     if out[7]:

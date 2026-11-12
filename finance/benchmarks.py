@@ -14,13 +14,11 @@ from __future__ import annotations
 
 import datetime as dt
 import random
-import ssl
 import time
 from collections.abc import Callable
 
 import pandas as pd
-import requests
-from requests.adapters import HTTPAdapter
+import yfinance as yf
 from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
@@ -36,7 +34,6 @@ BENCHMARKS = {
 }
 DEFAULT = "SPY"
 REFETCH_HOURS = 6
-YAHOO_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 
 Fetcher = Callable[[str, dt.date, dt.date], list[tuple[dt.date, float]]]
 _last_attempt: dict[str, float] = {}
@@ -46,48 +43,26 @@ class BenchmarkError(RuntimeError):
     pass
 
 
-class _SystemTrustAdapter(HTTPAdapter):
-    """Verify TLS against the OS trust store (also trusts corporate proxy roots installed there).
-
-    Python 3.13 enables VERIFY_X509_STRICT, which rejects some proxy-issued CA certificates; the chain and
-    host name are still verified, only that extra strictness is relaxed.
-    """
-
-    def init_poolmanager(self, *args, **kwargs):
-        ctx = ssl.create_default_context()
-        ctx.load_default_certs()
-        ctx.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
-        kwargs["ssl_context"] = ctx
-        return super().init_poolmanager(*args, **kwargs)
-
-
-def _session() -> requests.Session:
-    s = requests.Session()
-    s.mount("https://", _SystemTrustAdapter())
-    s.headers["User-Agent"] = "Mozilla/5.0 (personal-finance)"
-    return s
-
-
 def _yahoo_chart(symbol: str, start: dt.date, end: dt.date, adjusted: bool) -> list[tuple[dt.date, float]]:
-    p1 = int(dt.datetime.combine(start, dt.time()).replace(tzinfo=dt.timezone.utc).timestamp())
-    p2 = int(dt.datetime.combine(end + dt.timedelta(days=1), dt.time()).replace(tzinfo=dt.timezone.utc).timestamp())
+    """Daily closes via the yfinance library (it wraps Yahoo Finance, handling the request format, crumbs and
+    rate limiting, so we don't track Yahoo's endpoints ourselves).
+
+    yfinance uses curl_cffi under the hood, which verifies TLS through the OS trust store and so works behind
+    this machine's TLS-inspecting proxy without the Python 3.13 VERIFY_X509_STRICT workaround requests needed.
+    """
+    column = "Adj Close" if adjusted else "Close"
     try:
-        r = _session().get(YAHOO_URL.format(symbol=symbol), timeout=20,
-                           params={"period1": p1, "period2": p2, "interval": "1d", "events": "history"})
-        if r.status_code == 404:
-            raise BenchmarkError(f"{symbol} is not a symbol Yahoo Finance knows")
-        r.raise_for_status()
-        result = r.json()["chart"]["result"][0]
-        stamps = result.get("timestamp") or []
-        ind = result["indicators"]
-        closes = ind["adjclose"][0]["adjclose"] if adjusted else ind["quote"][0]["close"]
-        tz = result.get("meta", {}).get("gmtoffset", 0)
-    except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as exc:
+        # yfinance treats `end` as exclusive, so add a day to include closes on `end` itself.
+        hist = yf.Ticker(symbol).history(start=start, end=end + dt.timedelta(days=1), interval="1d",
+                                         auto_adjust=False, actions=False, raise_errors=False)
+    except Exception as exc:  # noqa: BLE001 - yfinance raises assorted network/parse errors; funnel them
         raise BenchmarkError(f"Could not download {symbol} prices: {exc}") from exc
+    if hist is None or hist.empty or column not in hist.columns:
+        return []  # unknown symbol or no trading days in range; caller reports "no prices"
     out = []
-    for ts, close in zip(stamps, closes):
-        if close is not None:
-            out.append((dt.datetime.fromtimestamp(ts + tz, dt.timezone.utc).date(), round(float(close), 4)))
+    for ts, close in hist[column].items():
+        if pd.notna(close):  # ts is tz-aware in the exchange's timezone; its date is the trading date
+            out.append((ts.date(), round(float(close), 4)))
     return out
 
 

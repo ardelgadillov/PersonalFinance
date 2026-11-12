@@ -193,4 +193,12 @@ def run(host: str = "127.0.0.1", port: int = 8050, debug: bool = False, startup_
         sync_manager.schedule_daily(int(hour), settings=settings)
     print(f"Personal Finance running at http://{host}:{port}  (data: {settings.data_dir}"
           f"{', DEMO' if settings.demo else ''})")
-    app.run(host=host, port=port, debug=debug, use_reloader=False)
+    if debug:
+        # Flask/werkzeug dev server: live tracebacks for development (no reloader - it would
+        # start two background syncs). Prints the "development server" warning; that is expected.
+        app.run(host=host, port=port, debug=True, use_reloader=False)
+    else:
+        # Production serving (incl. the HA add-on): waitress is a small, multi-threaded, pure-Python
+        # WSGI server - no compiled deps, so it runs the same on Windows and all HA architectures.
+        from waitress import serve
+        serve(app.server, host=host, port=port)  # app.server is the underlying Flask WSGI app

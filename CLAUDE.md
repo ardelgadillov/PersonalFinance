@@ -24,8 +24,8 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
 - `finance/cashflow.py` pandas cash flow analytics (monthly, by category, trend, merchants, Sankey).
 - `finance/networth.py` net worth from `balance_snapshots` (daily, by group, monthly change, account rows).
 - `finance/investments.py` holdings from `holding_snapshots` (gain, weight, price change, allocation, cost basis,
-  time-weighted return). `finance/benchmarks.py` benchmark closes (Yahoo chart API, cached in `benchmark_prices`;
-  fake deterministic series in demo mode; also dividend-adjusted fund closes in `fund_prices`).
+  time-weighted return). `finance/benchmarks.py` benchmark closes (via the `yfinance` library, cached in
+  `benchmark_prices`; fake deterministic series in demo mode; also dividend-adjusted fund closes in `fund_prices`).
 - `finance/optimizer.py` Markowitz (mirrors the QuiraData notebook: log returns x 252, SLSQP, long only) + cap per
   fund, frontier point, walk-forward test, fund-list parsing. `finance/fundmenu.py` per-account fund menus
   (`fund_menu`) and the current mix from the latest holdings. Page: `finance/app/pages/optimizer.py`.
@@ -103,5 +103,8 @@ investments and net worth in a Plotly Dash web app. Roadmap, decisions and miles
 - Git workflow: commit straight to `main` (no feature branches) and push when asked. This solo project has no
   PR/review step; still run the tests before committing.
 - Outbound HTTPS from Python on this machine goes through a TLS-inspecting proxy: Python 3.13's VERIFY_X509_STRICT
-  rejects its CA. `benchmarks._SystemTrustAdapter` uses the Windows trust store and drops only that flag.
+  (the `requests`/`ssl` default) rejects its CA. `benchmarks.py` now fetches via `yfinance`, which uses `curl_cffi`
+  and verifies against the OS trust store, so it works behind the proxy without that workaround (and its browser
+  impersonation avoids Yahoo's rate-limiting that a plain `requests.Session` hits). The SimpleFIN client still uses
+  `requests`; if it ever needs the strict flag dropped, re-add a system-trust adapter there.
 - Run the app with `use_reloader=False` (already in `run()`): the reloader would start two background syncs.

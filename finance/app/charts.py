@@ -19,6 +19,11 @@ THEMES = chart_themes()
 FONT = "Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
 CONFIG = {"displayModeBar": False, "responsive": True}
 
+# Toggle the mplcyberpunk-style neon bloom on lines/areas/bars (see `glow` below).
+# Set to True to turn the effect back on; when False, `glow()` leaves figures untouched
+# so lines keep their plain, thinner stroke. No UI control - this is the single switch.
+GLOW_ENABLED = False
+
 
 def colors(theme: str | None) -> dict:
     return THEMES.get(theme or "light", THEMES["light"])
@@ -81,7 +86,12 @@ def glow(fig: go.Figure, theme: str | None = None, *, layers: int = 4, spread: f
       band's cumulative top edge and is drawn *over* the fills so it stays visible.
     * **bars** - widening transparent-fill copies with a coloured border bloom *under* the
       bars (per-bar colours supported); the original keeps its slot in grouped charts.
+
+    Disabled by default via ``GLOW_ENABLED`` (set at the top of this module); when off the
+    figure is returned unchanged, so the whole effect is kept but inert.
     """
+    if not GLOW_ENABLED:
+        return fig
     under: list = []   # drawn beneath the originals (line/bar bloom, underfill)
     over: list = []    # drawn above the originals (area edges, so fills don't hide them)
     stack_cum: dict[str, list[float]] = {}

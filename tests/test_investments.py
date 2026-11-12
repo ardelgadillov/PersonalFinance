@@ -148,7 +148,8 @@ def test_benchmark_cache_and_errors(demo, monkeypatch):
     assert services.write(bm.ensure, "SPY", dt.date(2025, 6, 1), hi, broken, now=1002.0) is None
     assert services.write(bm.ensure, "SPY", dt.date(2025, 6, 1), hi, broken,
                           now=1002.0 + bm.REFETCH_HOURS * 3600) == "offline"
-    monkeypatch.setattr(bm, "_session", lambda: (_ for _ in ()).throw(AssertionError("no network in demo")))
+    monkeypatch.setattr(bm, "_yahoo_chart",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no network in demo")))
     prices, err = services.write(bm.load, "VT", lo, hi, True)
     assert err is None and not prices.empty
 

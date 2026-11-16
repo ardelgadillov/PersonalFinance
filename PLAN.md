@@ -103,28 +103,6 @@ tests/                       # fixture JSON/CSV, no real data
    verified in a live HA instance (no Docker/Supervisor available in dev).
 
 # My test/changes
-1. Empower categories with no app category: General Rebalance, Uncategorized, Rewards to General Merchandise, 
-   Advisory Fee to Fees, Expense Reimbursement to Other Income, 
-   Printing, Business Miscellaneous to Education 
-2. Networth page
-   - Accounts show all accounts, but there should be a separate list/panel by Account Group
-     and therefore column group is not needed in the table
-   - The chart should be next to the table
-3. Cashflow page
-   - Filter show also show "Last month"
-   - In the chart, the net should be always cumulative, and show net for the last period in grey
-   - The sanky diagram should be below the income/spending chart   
-   - In spending category bar when clicking in a bar should filter the transactions on the table,
-     the same for the sanky diagram
-   - In the table instead of top merchants show all transactions for the period/category
-   - It should be possible to change the category or create/modify the rule for the transaction
-     directly here without need to go to the settings, but keep settings functionality
-4. Investments page
-   - When clicking in allocation by holding/account the performance tab should calculate
-     the performance connecting to yfinance for the period
-5. Optimizar page
-   - in the table with the holdings/tickers, when clicking a holding there should be a line
-     chart showing the performance of that ticker in the period, similar to the investments
-     page
-6. Transactions page
-    How the pending transactions are managed?
+1. is it possible to create a manual account? 
+2. Chashflow, This year is comparing with febraury last year, it should compare the same month
+3. Performance chart is only being updated since the creation/first sync with simplefin

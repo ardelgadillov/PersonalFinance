@@ -103,12 +103,12 @@ def test_page_callbacks(demo):
     assert page.layout()
     for theme in ("light", "dark"):
         out = page.update("12m", None, None, None, theme, 0, None)
-        kpis, monthly, cats, cat_style, sankey, merchants, options, trend_cat, dates_style, title, _ = out
-        assert len(kpis) == 5 and monthly.data and cats.data and sankey.data and merchants
+        kpis, monthly, cats, cat_style, sankey, options, trend_cat, dates_style, title, _ = out
+        assert len(kpis) == 5 and monthly.data and cats.data and sankey.data
         assert trend_cat == options[0]["value"] and dates_style == {"display": "none"} and "month" in title
         assert page.update_trend(trend_cat, "12m", None, None, None, theme, 0).data
     empty = page.update("custom", "1990-01-01", "1990-02-01", None, "light", 0, "Groceries")
-    assert empty[7] is None and empty[8] == {}
+    assert empty[6] is None and empty[7] == {}
     assert page.pick_category({"points": [{"y": "Groceries"}]}) == "Groceries"
     assert tx.PERIODS["last_year"]
 
@@ -132,11 +132,48 @@ def test_daily_and_this_month_view(demo):
     from finance.app.pages import cashflow as page
     create_app()
     out = page.update("month", None, None, None, "dark", 0, None)
-    fig, title = out[1], out[9]
+    fig, title = out[1], out[8]
     assert title == "Income and spending by day"
     names = [t.name for t in fig.data if t.showlegend is not False]  # skip glow_lines underlays
     assert names[:2] == ["Income", "Spending"] and any(n.startswith("Net so far") for n in names[2:])
     assert "per day" in str(out[0][-1])
-    if out[7]:
-        trend = page.update_trend(out[7], "month", None, None, None, "dark", 0)
+    if out[6]:
+        trend = page.update_trend(out[6], "month", None, None, None, "dark", 0)
         assert trend.layout.xaxis.tickformat == "%b %d"
+
+
+def test_last_month_and_cumulative_net(demo):
+    from finance.app.main import create_app
+    from finance.app.pages import cashflow as page
+    create_app()
+
+    # "Last month" uses the day-by-day view
+    out = page.update("last_month", None, None, None, "light", 0, None)
+    assert out[8] == "Income and spending by day"
+    assert page.update_trend(out[6], "last_month", None, None, None, "light", 0).data
+
+    # 12-month view: the Net line is cumulative, with a grey previous-period line overlaid
+    monthly = page.update("12m", None, None, None, "light", 0, None)[1]
+    names = [t.name for t in monthly.data if t.showlegend is not False]
+    assert "Net (cumulative)" in names and "Net, last period" in names
+    cum = next(t for t in monthly.data if t.name == "Net (cumulative)")
+    df, months = page._load("12m", None, None, None)
+    m = cf.monthly(df, months)
+    assert list(cum.y) == pytest.approx(list(m["net"].cumsum()))
+
+
+def test_transactions_table_filter_and_rule(demo):
+    from finance.app.main import create_app
+    from finance.app.pages import cashflow as page
+    create_app()
+
+    # the transactions table lists the period, and a category filter narrows it to that category
+    all_rows, all_label = page.load_cf_txns("12m", None, None, None, None, 0, 0)
+    groc_rows, groc_label = page.load_cf_txns("12m", None, None, None, "Groceries", 0, 0)
+    assert all_rows and 0 < len(groc_rows) <= len(all_rows)
+    assert all(r["category"] == "Groceries" for r in groc_rows)
+    assert "Groceries" in groc_label and "period" in all_label
+
+    # the rule preview (reused from the Transactions page) reports how many rows a pattern would match
+    preview = page.cf_preview_rule(groc_rows[0]["description"], "description", "contains", None, None, True)
+    assert preview is not None

@@ -6,7 +6,8 @@ import datetime as dt
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.graph_objects as go
-from dash import Input, Output, callback, dcc, html
+from dash import Input, Output, callback, ctx, dcc, html
+from dash.exceptions import PreventUpdate
 
 from finance import networth as nw
 from finance import services
@@ -16,6 +17,8 @@ from finance.app.components import grid, money_col, panel
 
 PERIODS = ["30d", "90d", "ytd", "12m", "last_year", "24m", "all", "custom"]
 PERSIST = {"persistence": True, "persistence_type": "local"}
+GROUP_KEYS = [g[0] for g in nw.GROUPS]
+GROUP_LABELS = {g[0]: g[1] for g in nw.GROUPS}
 
 
 def _money(v: float | None, signed: bool = False) -> str:
@@ -48,13 +51,12 @@ def layout() -> html.Div:
                 lg=4, md=8),
     ], className="g-2 mb-3 align-items-center")
     account_cols = [
-        {"field": "group", "headerName": "Group", "minWidth": 130},
-        {"field": "account", "headerName": "Account", "minWidth": 200},
-        {"field": "institution", "headerName": "Institution", "minWidth": 150},
-        money_col("balance", "Balance", minWidth=120),
-        money_col("change", "Change in period", minWidth=130),
-        {"field": "updated", "headerName": "Last balance", "maxWidth": 140,
-         "headerTooltip": "Date of the latest balance snapshot (one per sync day)"},
+        {"field": "account", "headerName": "Account", "minWidth": 140, "flex": 2, "tooltipField": "account"},
+        {"field": "institution", "headerName": "Institution", "minWidth": 110, "flex": 1,
+         "tooltipField": "institution"},
+        money_col("balance", "Balance", minWidth=105),
+        money_col("change", "Change", minWidth=95,
+                  headerTooltip="Change over the period; last balance snapshot date is the tooltip on the account"),
     ]
     return html.Div([
         dbc.Alert(["Some accounts have no type yet, so they are grouped by the sign of their balance. ",
@@ -62,20 +64,38 @@ def layout() -> html.Div:
                   color="warning", className="py-2") if untyped else None,
         filters,
         html.Div(id="nw-kpis", className="stat-strip mb-3"),
-        panel("Net worth over time", _graph("nw-history", 380), subtitle=html.Span(id="nw-history-subtitle")),
+        dbc.Row([
+            dbc.Col(panel("Net worth over time", _graph("nw-history", 420),
+                          subtitle=html.Span(id="nw-history-subtitle")), lg=6),
+            dbc.Col(_accounts_section(account_cols), lg=6),
+        ], className="g-3"),
         dbc.Row([
             dbc.Col(panel("Change by month", _graph("nw-monthly", 300),
                           subtitle="Net worth at month end compared with the previous month end."), lg=7),
             dbc.Col(panel("Composition", _graph("nw-composition", 300),
                           subtitle="Balance by group at the end of the period."), lg=5),
         ], className="g-3"),
-        panel("Accounts",
-              grid("nw-accounts-grid", account_cols, [], height=360,
-                   dashGridOptions={"rowSelection": {"mode": "singleRow", "checkboxes": False,
-                                                     "enableClickSelection": True}}),
-              subtitle=("Click an account to see its balance history. Choose which accounts count in Settings "
-                        "(Include in net worth, Hidden).")),
         panel(html.Span("Account history", id="nw-account-title"), _graph("nw-account", 300)),
+        dcc.Store(id="nw-account-sel"),
+    ])
+
+
+def _accounts_section(cols: list[dict]) -> html.Div:
+    """One account list per group, shown below a shared heading; empty groups hide at runtime."""
+    panels = []
+    for key in GROUP_KEYS:
+        panels.append(html.Div([
+            html.Div(html.Span(GROUP_LABELS[key], id=f"nw-acctitle-{key}"), className="panel-title mb-1"),
+            grid(f"nw-grid-{key}", cols, [], height=None,
+                 dashGridOptions={"domLayout": "autoHeight",
+                                  "rowSelection": {"mode": "singleRow", "checkboxes": False,
+                                                   "enableClickSelection": True}}),
+        ], id=f"nw-accpanel-{key}", className="mb-3", style={"display": "none"}))
+    return html.Div([
+        html.Div("Accounts", className="panel-title mb-2"),
+        *panels,
+        html.Div("Click an account to see its balance history. Choose which accounts count in Settings "
+                 "(Include in net worth, Hidden).", className="panel-subtitle"),
     ])
 
 
@@ -174,11 +194,14 @@ def account_figure(series: pd.Series | None, label: str, group: str, theme) -> g
 
 
 # --------------------------------------------------------------------------- callbacks
-@callback(Output("nw-kpis", "children"), Output("nw-history", "figure"), Output("nw-history-subtitle", "children"),
-          Output("nw-monthly", "figure"), Output("nw-composition", "figure"), Output("nw-accounts-grid", "rowData"),
-          Output("nw-dates-col", "style"),
-          Input("nw-period", "value"), Input("nw-dates", "start_date"), Input("nw-dates", "end_date"),
-          Input("nw-accounts", "value"), Input("theme", "data"), Input("sync-version", "data"))
+@callback(
+    [Output("nw-kpis", "children"), Output("nw-history", "figure"), Output("nw-history-subtitle", "children"),
+     Output("nw-monthly", "figure"), Output("nw-composition", "figure"), Output("nw-dates-col", "style")]
+    + [Output(f"nw-grid-{g}", "rowData") for g in GROUP_KEYS]
+    + [Output(f"nw-acctitle-{g}", "children") for g in GROUP_KEYS]
+    + [Output(f"nw-accpanel-{g}", "style") for g in GROUP_KEYS],
+    [Input("nw-period", "value"), Input("nw-dates", "start_date"), Input("nw-dates", "end_date"),
+     Input("nw-accounts", "value"), Input("theme", "data"), Input("sync-version", "data")])
 def update(period, start, end, accounts, theme, _version):
     daily, accts, full = _load(period, start, end, accounts)
     groups = nw.by_group(daily, accts)
@@ -201,24 +224,45 @@ def update(period, start, end, accounts, theme, _version):
     else:
         subtitle = (f"Debts are shown below zero; the line is net worth. History starts at the first sync "
                     f"({full.index.min():%b %d, %Y}).")
-    return (kpis, history_figure(groups, theme), subtitle, monthly_figure(nw.monthly_change(groups), theme),
-            composition_figure(groups, theme), nw.account_rows(daily, accts),
-            {} if period == "custom" else {"display": "none"})
+    rows = nw.account_rows(daily, accts)
+    by: dict[str, list] = {g: [] for g in GROUP_KEYS}
+    for r in rows:
+        key = r.get("group_key") if r.get("group_key") in by else "other"
+        by[key].append(r)
+    row_data = [by[g] for g in GROUP_KEYS]
+    titles, styles = [], []
+    for g in GROUP_KEYS:
+        grp = by.get(g, [])
+        total = sum(r["balance"] for r in grp if r.get("balance") is not None)
+        titles.append(f"{GROUP_LABELS[g]}  {_money(total)}" if grp else GROUP_LABELS[g])
+        styles.append({} if grp else {"display": "none"})
+    return ([kpis, history_figure(groups, theme), subtitle, monthly_figure(nw.monthly_change(groups), theme),
+             composition_figure(groups, theme), {} if period == "custom" else {"display": "none"}]
+            + row_data + titles + styles)
+
+
+@callback(Output("nw-account-sel", "data"),
+          [Input(f"nw-grid-{g}", "selectedRows") for g in GROUP_KEYS],
+          prevent_initial_call=True)
+def pick_account(*selections):
+    trig = ctx.triggered_id
+    if not isinstance(trig, str) or not trig.startswith("nw-grid-"):
+        raise PreventUpdate
+    sel = selections[GROUP_KEYS.index(trig[len("nw-grid-"):])]
+    if not sel:
+        raise PreventUpdate
+    return sel[0]
 
 
 @callback(Output("nw-account", "figure"), Output("nw-account-title", "children"),
-          Input("nw-accounts-grid", "selectedRows"), Input("nw-accounts-grid", "rowData"),
+          Input("nw-account-sel", "data"),
           Input("nw-period", "value"), Input("nw-dates", "start_date"), Input("nw-dates", "end_date"),
           Input("theme", "data"), Input("sync-version", "data"))
-def update_account(selected, rows, period, start, end, theme, _version):
-    ids = {r["id"] for r in rows or []}
-    row = selected[0] if selected and selected[0]["id"] in ids else (rows[0] if rows else None)
-    if row is None:
-        return account_figure(None, "", "cash", theme), "Account history"
+def update_account(row, period, start, end, theme, _version):
+    if not row:
+        return account_figure(None, "", "cash", theme), "Account history (click an account above)"
     daily, _ = services.read(nw.load, [row["id"]])
     daily = nw.clip(daily, *_range(period, start, end))
     series = daily[row["id"]] if row["id"] in daily else None
     title = f"{row['account']}" + (f" ({row['institution']})" if row.get("institution") else "")
-    if not selected:
-        title += " (click another account in the table)"
     return account_figure(series, row["account"], row.get("group_key") or "cash", theme), title

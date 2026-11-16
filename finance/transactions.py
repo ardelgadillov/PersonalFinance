@@ -22,6 +22,7 @@ PERIODS = {
     "30d": "Last 30 days",
     "90d": "Last 90 days",
     "month": "This month",
+    "last_month": "Last month",
     "ytd": "This year",
     "12m": "Last 12 months",
     "last_year": "Last year",
@@ -49,6 +50,9 @@ def period_range(period: str, today: dt.date | None = None) -> tuple[dt.date | N
         return today - dt.timedelta(days=89), today
     if period == "month":
         return today.replace(day=1), today
+    if period == "last_month":
+        last_prev = today.replace(day=1) - dt.timedelta(days=1)
+        return last_prev.replace(day=1), last_prev
     if period == "ytd":
         return today.replace(month=1, day=1), today
     if period == "12m":

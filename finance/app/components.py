@@ -20,12 +20,14 @@ def editable(col: dict) -> dict:
             "headerTooltip": "Click a cell to edit"}
 
 
-def grid(id_: str, column_defs: list[dict], row_data: list[dict], height: int = 450,
+def grid(id_: str, column_defs: list[dict], row_data: list[dict], height: int | None = 450,
          row_id: str | None = "params.data.id", **kw) -> dag.AgGrid:
     options = {"animateRows": False, "stopEditingWhenCellsLoseFocus": True,
                "singleClickEdit": True, "tooltipShowDelay": 300}
     options.update(kw.pop("dashGridOptions", {}))
     extra = {"getRowId": row_id} if row_id else {}
+    # height=None lets the grid size to its content (pair with dashGridOptions domLayout="autoHeight")
+    style = {"width": "100%"} if height is None else {"height": f"{height}px", "width": "100%"}
     return dag.AgGrid(
         id=id_,
         columnDefs=column_defs,
@@ -33,7 +35,7 @@ def grid(id_: str, column_defs: list[dict], row_data: list[dict], height: int = 
         defaultColDef={"sortable": True, "resizable": True, "filter": True, "minWidth": 90},
         columnSize="responsiveSizeToFit",
         dashGridOptions=options,
-        style={"height": f"{height}px", "width": "100%"},
+        style=style,
         **extra,
         **kw,
     )

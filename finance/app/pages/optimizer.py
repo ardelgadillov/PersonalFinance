@@ -125,9 +125,12 @@ def layout() -> html.Div:
         html.Div(id="opt-msg"),
         dbc.Row([
             dbc.Col(panel("Weights", grid("opt-weights", weight_cols, [], height=330, row_id="params.data.symbol"),
-                          subtitle="Long only, each fund capped at the max per fund."), lg=7),
+                          subtitle="Long only, each fund capped at the max per fund. Click a ticker for its chart."),
+                    lg=7),
             dbc.Col(panel("Current vs selected", _graph("opt-weights-chart", 330)), lg=5),
         ], className="g-3"),
+        dcc.Store(id="opt-ticker-sym"),
+        panel("Ticker performance", _graph("opt-ticker", 320), subtitle=html.Span(id="opt-ticker-subtitle")),
         panel("Portfolios", grid("opt-stats", stats_cols, [], height=300, row_id="params.data.portfolio"),
               subtitle=html.Span(id="opt-stats-subtitle")),
         panel("In-sample backtest", _graph("opt-backtest", 340), subtitle=html.Span(id="opt-backtest-subtitle")),
@@ -391,3 +394,32 @@ def update_selected(target, account, lookback, cap, rf, train, refresh, version,
                     "test below.")
     return (frontier_figure(a, ports, theme), label, stats, stats_sub, weights, weights_figure(a, ports, theme),
             lines_figure(series, theme), backtest_sub)
+
+
+@callback(Output("opt-ticker-sym", "data"), Input("opt-weights", "cellClicked"), prevent_initial_call=True)
+def pick_ticker(click):
+    # the Weights grid uses the ticker as its row id, so a clicked cell carries it directly
+    if not click or not click.get("rowId"):
+        return no_update
+    return click["rowId"]
+
+
+@callback(Output("opt-ticker", "figure"), Output("opt-ticker-subtitle", "children"),
+          Input("opt-ticker-sym", "data"), Input("opt-lookback", "value"), Input("sync-version", "data"),
+          Input("theme", "data"))
+def ticker_performance(symbol, lookback, _version, theme):
+    if not symbol:
+        return empty_figure(theme, "Click a ticker in the Weights table to see its performance", height=320), None
+    years = int(lookback or 5)
+    start = dt.date.today() - dt.timedelta(days=365 * years)
+    prices = services.read(bm.fund_prices, [symbol], start)
+    series = prices[symbol].dropna() if symbol in prices else pd.Series(dtype=float)
+    if series.empty:
+        return empty_figure(theme, f"No cached price history for {symbol}", height=320), None
+    ri = bm.return_index(series, series.index)
+    c = colors(theme)
+    fig = lines_figure([(symbol, ri, c["series"][SLOT[SELECTED]], "solid")], theme, height=320)
+    total = float(ri.iloc[-1]) if ri is not None and len(ri) else None
+    sub = (f"{symbol}: {total:+.1%} total return over the last {years} year(s), dividend-adjusted."
+           if total is not None else None)
+    return fig, sub

@@ -307,14 +307,18 @@ def update_performance(selected, rows, focus, benchmark, period, start, end, acc
     if port is not None:
         series.append(("Portfolio", port, c["text"], "solid"))
     row = _pick(selected, rows)
-    if focus:
+    if focus:  # an allocation click: show the ticker's market return from yfinance for the period
         name, h = focus, inv.focus_holdings(holdings, focus)
+        prices, _ferr = services.write(bm.load, focus, idx[0].date(), idx[-1].date(), get_settings().demo)
+        holding = bm.return_index(prices, idx)
+        if holding is None:  # not a tradable ticker (e.g. a fund with no symbol): fall back to snapshots
+            holding = inv.return_index(h, idx)
     elif row is not None:
         name = inv.symbol_of(row)
         h = holdings[(holdings["account_id"] == row["account_id"]) & (holdings["holding_id"] == row["holding_id"])]
+        holding = inv.return_index(h, idx)
     else:
-        name, h = None, holdings.iloc[0:0]
-    holding = inv.return_index(h, idx) if name else None
+        name, h, holding = None, holdings.iloc[0:0], None
     if holding is not None:  # colored like its account (the first one, for a symbol held in several)
         slots = [a["slot"] for a in services.read(inv.investment_accounts, list(h["account_id"].unique()))]
         series.append((name, holding, c["series"][min(slots, default=0)], "solid"))

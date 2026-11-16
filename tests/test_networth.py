@@ -105,16 +105,24 @@ def test_page_callbacks(demo):
 
     create_app()
     assert page.layout()
+    keys = page.GROUP_KEYS
+    n = len(keys)
     for theme in ("light", "dark"):
-        kpis, hist, subtitle, monthly, comp, rows, dates_style = page.update("12m", None, None, None, theme, 0)
+        out = page.update("12m", None, None, None, theme, 0)
+        kpis, hist, subtitle, monthly, comp, dates_style = out[:6]
+        row_data = dict(zip(keys, out[6:6 + n]))
+        titles = dict(zip(keys, out[6 + n:6 + 2 * n]))
+        styles = dict(zip(keys, out[6 + 2 * n:6 + 3 * n]))
         assert len(kpis) == 4 and dates_style == {"display": "none"}
         names = [t.name for t in hist.data if t.showlegend is not False]  # skip glow underlays/edges
         assert names[-1] == "Net worth" and "Cash" in names and "Loans and other debt" in names
-        assert monthly.data and comp.data and rows
-        fig, title = page.update_account([rows[1]], rows, "12m", None, None, theme, 0)
-        assert fig.data and title.startswith(rows[1]["account"])
-        assert page.update_account(None, rows, "12m", None, None, theme, 0)[1].startswith(rows[0]["account"])
-    assert page.update_account(None, [], "12m", None, None, "light", 0)[1] == "Account history"
+        assert monthly.data and comp.data
+        assert row_data["cash"] and styles["cash"] == {} and "Cash" in titles["cash"]
+        acct = row_data["cash"][0]
+        fig, title = page.update_account(acct, "12m", None, None, theme, 0)
+        assert fig.data and title.startswith(acct["account"])
+        assert "click" in page.update_account(None, "12m", None, None, theme, 0)[1].lower()
     custom = page.update("custom", "2026-03-01", "2026-03-31", ["DEMO-CHK"], "light", 0)
-    assert custom[6] == {} and len(custom[5]) == 1
+    assert custom[5] == {}  # dates picker visible for a custom range
+    assert sum(len(custom[6 + i]) for i in range(n)) == 1  # only DEMO-CHK across all group lists
     assert services.read(lambda s: s.scalar(select(Account.type).where(Account.id == "DEMO-CHK"))) == "checking"

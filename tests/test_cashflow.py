@@ -162,6 +162,34 @@ def test_last_month_and_cumulative_net(demo):
     assert list(cum.y) == pytest.approx(list(m["net"].cumsum()))
 
 
+def test_prev_period_alignment(monkeypatch):
+    """The comparison line aligns to the right months: YTD vs the SAME months last year (not an
+    equal-length window shifted by the YTD length), year-aligned periods vs the window before."""
+    import pandas as pd
+
+    from finance.app.pages import cashflow as page
+
+    captured = {}
+
+    def fake_read(fn, lo, hi, accounts):
+        captured["range"] = (lo, hi)
+        return pd.DataFrame(columns=cf.COLUMNS)
+
+    monkeypatch.setattr(page.services, "read", fake_read)
+
+    # Year-to-date Jan..Nov 2026 should compare against Jan..Nov 2025 (bug was Feb..Dec 2025).
+    ytd = pd.date_range("2026-01-01", "2026-11-01", freq="MS")
+    page._prev_cumnet("ytd", ytd, None)
+    assert captured["range"] == (dt.date(2025, 1, 1), dt.date(2025, 11, 30))
+
+    # A whole-year period keeps the equal-length window immediately before (also calendar-aligned).
+    twelve = pd.date_range("2025-12-01", "2026-11-01", freq="MS")
+    page._prev_cumnet("12m", twelve, None)
+    assert captured["range"] == (dt.date(2024, 12, 1), dt.date(2025, 11, 30))
+
+    assert page._prev_cumnet("all", twelve, None) is None
+
+
 def test_transactions_table_filter_and_rule(demo):
     from finance.app.main import create_app
     from finance.app.pages import cashflow as page

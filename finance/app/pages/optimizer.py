@@ -130,7 +130,11 @@ def layout() -> html.Div:
             dbc.Col(panel("Current vs selected", _graph("opt-weights-chart", 330)), lg=5),
         ], className="g-3"),
         dcc.Store(id="opt-ticker-sym"),
-        panel("Ticker performance", _graph("opt-ticker", 320), subtitle=html.Span(id="opt-ticker-subtitle")),
+        panel("Performance vs market", _graph("opt-ticker", 320),
+              subtitle=html.Span(id="opt-ticker-subtitle"),
+              actions=dcc.Dropdown(id="opt-bench", value=bm.DEFAULT, clearable=False, searchable=False,
+                                   options=[{"label": v, "value": k} for k, v in bm.BENCHMARKS.items()],
+                                   style={"minWidth": "210px"}, **PERSIST)),
         panel("Portfolios", grid("opt-stats", stats_cols, [], height=300, row_id="params.data.portfolio"),
               subtitle=html.Span(id="opt-stats-subtitle")),
         panel("In-sample backtest", _graph("opt-backtest", 340), subtitle=html.Span(id="opt-backtest-subtitle")),
@@ -405,21 +409,49 @@ def pick_ticker(click):
 
 
 @callback(Output("opt-ticker", "figure"), Output("opt-ticker-subtitle", "children"),
-          Input("opt-ticker-sym", "data"), Input("opt-lookback", "value"), Input("sync-version", "data"),
-          Input("theme", "data"))
-def ticker_performance(symbol, lookback, _version, theme):
-    if not symbol:
-        return empty_figure(theme, "Click a ticker in the Weights table to see its performance", height=320), None
-    years = int(lookback or 5)
-    start = dt.date.today() - dt.timedelta(days=365 * years)
-    prices = services.read(bm.fund_prices, [symbol], start)
-    series = prices[symbol].dropna() if symbol in prices else pd.Series(dtype=float)
-    if series.empty:
-        return empty_figure(theme, f"No cached price history for {symbol}", height=320), None
-    ri = bm.return_index(series, series.index)
+          Input("opt-ticker-sym", "data"), Input("opt-bench", "value"), *SETTINGS, Input("theme", "data"))
+def ticker_performance(symbol, bench, account, lookback, cap, rf, train, refresh, version, theme):
+    """Cumulative total return over the history used: the account's portfolio, a clicked ticker and a market
+    benchmark, all on the same dividend-adjusted basis so they are comparable."""
+    a, _info = _get(account, lookback, cap, rf, train, refresh, version)
     c = colors(theme)
-    fig = lines_figure([(symbol, ri, c["series"][SLOT[SELECTED]], "solid")], theme, height=320)
-    total = float(ri.iloc[-1]) if ri is not None and len(ri) else None
-    sub = (f"{symbol}: {total:+.1%} total return over the last {years} year(s), dividend-adjusted."
-           if total is not None else None)
+    if a is None:
+        return empty_figure(theme, "Add at least two priced funds to compare performance", height=320), None
+    idx = a.in_sample_returns.index
+
+    series = []
+    # The portfolio line: the account's current mix, or the max-Sharpe mix when there is no current one.
+    if a.current is not None:
+        port_name, port_w = "Current mix", a.current.weights
+    else:
+        port_name, port_w = "Max Sharpe mix", a.max_sharpe.weights
+    port = op.cumulative(op.mix_returns(a.in_sample_returns, port_w))
+    series.append((port_name, port, c["series"][SLOT[CURRENT]], "solid"))
+
+    # The clicked ticker (if any and priced), on the same window.
+    tkr = op.cumulative(a.in_sample_returns[symbol]) if symbol and symbol in a.symbols else None
+    if tkr is not None:
+        series.append((symbol, tkr, c["series"][SLOT[SELECTED]], "solid"))
+
+    # The market benchmark (dividend-adjusted closes, like the funds), aligned to the same window.
+    bench = bench or bm.DEFAULT
+    blabel = bm.BENCHMARKS.get(bench, bench)
+    bprices, _berr = services.write(bm.load_funds, [bench], a.start.date(), a.end.date(), get_settings().demo)
+    bench_ri = bm.return_index(bprices[bench].dropna(), idx) if bench in bprices.columns else None
+    if bench_ri is not None:
+        series.append((blabel, bench_ri, c["muted"], "dash"))
+
+    fig = lines_figure(series, theme, height=320)
+
+    def _tot(s):
+        return f"{float(s.iloc[-1]):+.1%}" if s is not None and len(s) else "n/a"
+
+    parts = [f"{port_name} {_tot(port)}"]
+    if tkr is not None:
+        parts.append(f"{symbol} {_tot(tkr)}")
+    if bench_ri is not None:
+        parts.append(f"{blabel} {_tot(bench_ri)}")
+    sub = (f"Cumulative total return (dividends included), {a.start:%b %Y} to {a.end:%b %Y}. "
+           + "  ".join(parts)
+           + ("" if symbol in a.symbols else "  Click a ticker in the Weights table to add it."))
     return fig, sub

@@ -142,14 +142,22 @@ def _load(period, start, end, accounts):
 
 
 def _prev_cumnet(period, months, accounts):
-    """Running net of the equivalent period just before `months`, aligned by position (None when not applicable)."""
+    """Running net of the comparison period, aligned by position (None when not applicable).
+
+    For a period whose length is not a whole number of years (e.g. year-to-date), the equal-length window
+    just before it would land on different calendar months (YTD January would compare against last February),
+    so the comparison is instead the SAME calendar months one year earlier. For year-aligned periods the two
+    are identical."""
     if period == "all" or len(months) == 0:
         return None
-    span = len(months)
-    prev_end = months[0] - pd.offsets.MonthBegin(1)       # first day of the previous month
-    prev_start = months[0] - pd.offsets.MonthBegin(span)  # first day of the month `span` months earlier
-    prev_months = pd.date_range(prev_start, prev_end, freq="MS")
-    lo, hi = prev_start.date(), (prev_end + pd.offsets.MonthEnd(0)).date()
+    if len(months) % 12:  # not a whole number of years -> same calendar months, previous year
+        prev_months = months - pd.DateOffset(years=1)
+    else:  # whole years -> the equal-length window immediately before (also year-aligned)
+        span = len(months)
+        prev_end = months[0] - pd.offsets.MonthBegin(1)       # first day of the previous month
+        prev_start = months[0] - pd.offsets.MonthBegin(span)  # first day of the month `span` months earlier
+        prev_months = pd.date_range(prev_start, prev_end, freq="MS")
+    lo, hi = prev_months[0].date(), (prev_months[-1] + pd.offsets.MonthEnd(0)).date()
     prev_df = services.read(cf.load_flows, lo, hi, accounts or None)
     return cf.monthly(prev_df, prev_months)["net"].cumsum()
 

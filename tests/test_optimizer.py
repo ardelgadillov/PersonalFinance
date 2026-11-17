@@ -178,6 +178,15 @@ def test_page_callbacks(demo, monkeypatch):
     low = page.update_selected(lo, "DEMO-401K", "5", 40, 0, "3", 0, 0, "light")[2]
     assert low[3]["vol"] == pytest.approx(low[2]["vol"], rel=1e-3)  # slider at the left end = min variance
 
+    # Performance vs market: portfolio + benchmark with no ticker, + the clicked ticker when one is given.
+    fig, sub = page.ticker_performance(None, "SPY", "DEMO-401K", "5", 40, 0, "3", 0, 0, "light")
+    names = [t.name for t in fig.data]
+    assert "Current mix" in names and "S&P 500 (SPY)" in names and len(fig.data) == 2
+    assert "Current mix" in sub and "Click a ticker" in sub
+    fig2, sub2 = page.ticker_performance("VFIAX", "QQQ", "DEMO-401K", "5", 40, 0, "3", 0, 0, "light")
+    names2 = [t.name for t in fig2.data]
+    assert names2 == ["Current mix", "VFIAX", "Nasdaq-100 (QQQ)"] and "VFIAX" in sub2
+
     # upload the demo CSV: adds the one fund not pre-loaded and skips the fund without a ticker
     payload = "data:text/csv;base64," + base64.b64encode(demo["fund_menu_path"].read_bytes()).decode()
     monkeypatch.setattr(page, "ctx", type("Ctx", (), {"triggered_id": "opt-upload"})())

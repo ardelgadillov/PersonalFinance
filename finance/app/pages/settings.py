@@ -37,6 +37,23 @@ def render_tab(tab: str, _version):
 
 
 # --------------------------------------------------------------------------- accounts
+IS_MANUAL = "params.data.source === 'Manual'"
+
+
+def _add_account_form() -> dbc.Row:
+    """Create a balance-only account you maintain by hand (e.g. a property, a car loan, a cash stash)."""
+    return dbc.Row([
+        dbc.Col(dbc.Input(id="acct-add-name", placeholder="Account name", size="sm"), md=3),
+        dbc.Col(dbc.Select(id="acct-add-type", size="sm", value="other",
+                           options=[{"label": TYPE_LABELS[t], "value": t} for t in ACCOUNT_TYPES]), md=2),
+        dbc.Col(dbc.Input(id="acct-add-balance", placeholder="Balance (e.g. 1500 or -200)", size="sm"), md=3),
+        dbc.Col(dbc.Checkbox(id="acct-add-networth", label="In net worth", value=True, className="small"),
+                md="auto", className="d-flex align-items-center"),
+        dbc.Col(dbc.Button([html.I(className="bi bi-plus-lg me-1"), "Add account"], id="acct-add-btn",
+                           color="primary", size="sm"), md="auto"),
+    ], className="g-2 mb-3 align-items-center")
+
+
 def accounts_tab() -> html.Div:
     rows = services.account_rows()
     for r in rows:
@@ -52,40 +69,121 @@ def accounts_tab() -> html.Div:
         editable({"field": "include_in_networth", "headerName": "In net worth", "cellDataType": "boolean",
                   "maxWidth": 130}),
         editable({"field": "hidden", "headerName": "Hidden", "cellDataType": "boolean", "maxWidth": 110}),
-        money_col("balance", "Balance", minWidth=120),
+        # Balance is editable only for manual accounts (synced balances come from the bank).
+        money_col("balance", "Balance", minWidth=120, editable={"function": IS_MANUAL},
+                  cellClassRules={"amount-neg": "params.value < 0", "cell-editable": IS_MANUAL},
+                  headerTooltip="Manual accounts: click to set today's balance"),
         {"field": "balance_date", "headerName": "Balance as of", "minWidth": 140},
         {"field": "transactions", "headerName": "Transactions", "type": "rightAligned", "maxWidth": 130},
         {"field": "since", "headerName": "Since", "maxWidth": 120},
         {"field": "source", "headerName": "Source", "minWidth": 130},
     ]
-    body = grid("accounts-grid", cols, rows, height=430) if rows else dbc.Alert(
-        "No accounts yet. Click Sync to download your accounts from SimpleFIN.", color="info", className="mb-0")
+    body = grid("accounts-grid", cols, rows, height=430,
+                dashGridOptions={"rowSelection": {"mode": "singleRow", "checkboxes": False,
+                                                  "enableClickSelection": True}}) if rows else dbc.Alert(
+        "No accounts yet. Click Sync to download your accounts from SimpleFIN, or add a manual account below.",
+        color="info", className="mb-0")
+    delete_btn = dbc.Button([html.I(className="bi bi-trash me-1"), "Delete selected manual account"],
+                            id="acct-delete-btn", color="danger", outline=True, size="sm")
     return html.Div([
         dbc.Alert(f"{untyped} account(s) have no type yet (highlighted). The type decides whether an account "
                   "counts as an asset or a liability and whether it appears in Investments.",
                   color="warning", className="py-2") if untyped else None,
         message("accounts-msg"),
-        panel("Accounts", body, subtitle="Columns with an indigo header are editable. Changes save immediately."),
+        panel("Add a manual account", _add_account_form(),
+              subtitle="A balance-only account you keep up to date yourself (property, vehicle, loan, cash). "
+                       "It has no transactions; edit its Balance cell to record a new value for today."),
+        panel("Accounts", body,
+              subtitle="Columns with an indigo header are editable. Changes save immediately. Select a manual "
+                       "account and use Delete to remove it.",
+              actions=delete_btn),
+        _delete_account_modal(),
     ])
 
 
-@callback(Output("accounts-msg", "children"), Input("accounts-grid", "cellValueChanged"),
-          prevent_initial_call=True)
+def _delete_account_modal() -> dbc.Modal:
+    return dbc.Modal(id="acct-delete-modal", is_open=False, children=[
+        dbc.ModalHeader(dbc.ModalTitle("Delete account")),
+        dbc.ModalBody([html.Div(id="acct-delete-body"), dcc.Store(id="acct-delete-id")]),
+        dbc.ModalFooter([
+            dbc.Button("Cancel", id="acct-delete-cancel", color="secondary", outline=True, size="sm"),
+            dbc.Button("Delete", id="acct-delete-confirm", color="danger", size="sm"),
+        ]),
+    ])
+
+
+@callback(Output("accounts-msg", "children"), Output("accounts-grid", "rowData", allow_duplicate=True),
+          Input("accounts-grid", "cellValueChanged"), prevent_initial_call=True)
 def save_account_edit(changes):
     if not changes:
-        return no_update
+        return no_update, no_update
     reverse = {v: k for k, v in TYPE_LABELS.items()}
-    saved = []
+    saved, refresh = [], False
     try:
         for ch in changes:
             field, value = ch["colId"], ch["value"]
+            if field == "balance":
+                saved.append(services.update_manual_balance(ch["data"]["id"], value))
+                refresh = True
+                continue
             if field == "type":
                 value = reverse.get(value, value) or None
             services.update_account(ch["data"]["id"], field, value)
-            saved.append(ch["data"].get("display_name") or ch["data"]["name"])
+            saved.append(f"Saved {ch['data'].get('display_name') or ch['data']['name']}")
     except ValueError as exc:
-        return alert(f"Not saved: {exc}", "danger")
-    return alert(f"Saved {', '.join(saved)}", duration=3000)
+        return alert(f"Not saved: {exc}", "danger"), _accounts_rowdata()
+    return alert("; ".join(saved), duration=3000), (_accounts_rowdata() if refresh else no_update)
+
+
+@callback(Output("acct-add-name", "value"), Output("accounts-msg", "children", allow_duplicate=True),
+          Output("accounts-grid", "rowData", allow_duplicate=True),
+          Input("acct-add-btn", "n_clicks"),
+          State("acct-add-name", "value"), State("acct-add-type", "value"), State("acct-add-balance", "value"),
+          State("acct-add-networth", "value"), prevent_initial_call=True)
+def add_manual_account(_clicks, name, type_, balance, in_networth):
+    try:
+        msg = services.create_manual_account(name, type_, balance, bool(in_networth))
+    except ValueError as exc:
+        return no_update, alert(f"Not added: {exc}", "danger"), no_update
+    return "", alert(msg), _accounts_rowdata()
+
+
+@callback(Output("acct-delete-modal", "is_open"), Output("acct-delete-body", "children"),
+          Output("acct-delete-id", "data"), Output("accounts-msg", "children", allow_duplicate=True),
+          Input("acct-delete-btn", "n_clicks"), Input("acct-delete-cancel", "n_clicks"),
+          State("accounts-grid", "selectedRows"), prevent_initial_call=True)
+def open_delete_account(_open, _cancel, selected):
+    if ctx.triggered_id == "acct-delete-cancel":
+        return False, no_update, no_update, no_update
+    row = (selected or [None])[0]
+    if row is None:
+        return False, no_update, no_update, alert("Select an account row first.", "info", duration=4000)
+    if row.get("source") != "Manual":
+        return False, no_update, no_update, alert(
+            "Only manual accounts can be deleted. Hide a synced account with the Hidden toggle instead.",
+            "warning", duration=5000)
+    body = html.P(["Delete ", html.Strong(row.get("display_name") or row["name"]),
+                   " and its balance history? This cannot be undone."])
+    return True, body, row["id"], no_update
+
+
+@callback(Output("acct-delete-modal", "is_open", allow_duplicate=True),
+          Output("accounts-msg", "children", allow_duplicate=True),
+          Output("accounts-grid", "rowData", allow_duplicate=True),
+          Input("acct-delete-confirm", "n_clicks"), State("acct-delete-id", "data"), prevent_initial_call=True)
+def confirm_delete_account(_clicks, account_id):
+    try:
+        msg = services.delete_manual_account(account_id)
+    except ValueError as exc:
+        return False, alert(f"Not deleted: {exc}", "danger"), no_update
+    return False, alert(msg), _accounts_rowdata()
+
+
+def _accounts_rowdata() -> list[dict]:
+    rows = services.account_rows()
+    for r in rows:
+        r["type"] = TYPE_LABELS.get(r["type"], "")
+    return rows
 
 
 # --------------------------------------------------------------------------- categories

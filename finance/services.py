@@ -9,16 +9,28 @@ import datetime as dt
 import json
 import re
 import threading
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from finance.config import Settings, get_settings
 from finance.db import get_engine, init_db
-from finance.models import ACCOUNT_TYPES, Account, Category, CategoryMap, EmpowerRow, SyncLog, Transaction, utcnow
+from finance.models import (
+    ACCOUNT_TYPES,
+    Account,
+    BalanceSnapshot,
+    Category,
+    CategoryMap,
+    EmpowerRow,
+    HoldingSnapshot,
+    SyncLog,
+    Transaction,
+    utcnow,
+)
 
 _init_lock = threading.Lock()
 _initialized: set[str] = set()
@@ -126,6 +138,7 @@ def sync_log_rows(settings: Settings | None = None, limit: int = 100) -> list[di
 
 # --------------------------------------------------------------------------- accounts
 EDITABLE_ACCOUNT_FIELDS = {"display_name", "type", "include_in_networth", "hidden"}
+SOURCE_LABELS = {"simplefin": "SimpleFIN", "empower": "Empower history", "manual": "Manual"}
 
 
 def account_rows(settings: Settings | None = None) -> list[dict]:
@@ -137,7 +150,7 @@ def account_rows(settings: Settings | None = None) -> list[dict]:
         accts = s.scalars(select(Account).order_by(Account.source.desc(), Account.org_name, Account.name)).all()
         return [{
             "id": a.id,
-            "source": "SimpleFIN" if a.source == "simplefin" else "Empower history",
+            "source": SOURCE_LABELS.get(a.source, a.source),
             "institution": a.org_name or "",
             "name": a.name,
             "display_name": a.display_name or "",
@@ -175,6 +188,82 @@ def untyped_account_count(settings: Settings | None = None) -> int:
     with session(settings) as s:
         return s.scalar(select(func.count()).select_from(Account).where(
             Account.type.is_(None), Account.hidden.is_(False))) or 0
+
+
+def _local_today(settings: Settings | None = None) -> dt.date:
+    return (to_local(utcnow(), settings) or utcnow()).date()
+
+
+def _to_amount(value) -> float:
+    """Parse a user-entered balance ('$1,234.50', '(500)' for a negative, etc.)."""
+    text = str(value if value is not None else "").strip().replace(",", "").replace("$", "")
+    negative = text.startswith("(") and text.endswith(")")
+    if negative:
+        text = text[1:-1]
+    try:
+        amount = float(text)
+    except ValueError:
+        raise ValueError("Enter a numeric balance, e.g. 1500 or -200.")
+    return -amount if negative else amount
+
+
+def create_manual_account(name: str, type_: str | None, balance, include_in_networth: bool = True,
+                          settings: Settings | None = None) -> str:
+    """Create a balance-only account whose balance you maintain by hand (no sync, no transactions)."""
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("Enter a name for the account.")
+    type_ = type_ or None
+    if type_ is not None and type_ not in ACCOUNT_TYPES:
+        raise ValueError(f"Unknown account type {type_!r}")
+    amount = _to_amount(balance)
+    now, today = utcnow(), _local_today(settings)
+    acct_id = "manual:" + uuid.uuid4().hex
+    with session(settings) as s:
+        s.add(Account(id=acct_id, source="manual", name=name, type=type_,
+                      include_in_networth=bool(include_in_networth), hidden=False,
+                      balance=amount, balance_date=now, first_seen=now, last_seen=now))
+        s.add(BalanceSnapshot(account_id=acct_id, date=today, balance=amount))
+        s.commit()
+    return f"Added manual account '{name}' with a balance of ${amount:,.2f}."
+
+
+def update_manual_balance(account_id: str, balance, settings: Settings | None = None) -> str:
+    """Record today's balance for a manual account (overwrites an earlier entry made today)."""
+    amount = _to_amount(balance)
+    now, today = utcnow(), _local_today(settings)
+    with session(settings) as s:
+        acct = s.get(Account, account_id)
+        if acct is None:
+            raise ValueError(f"Unknown account {account_id!r}")
+        if acct.source != "manual":
+            raise ValueError("Only manual accounts have an editable balance.")
+        snap = s.get(BalanceSnapshot, (account_id, today))
+        if snap is None:
+            s.add(BalanceSnapshot(account_id=account_id, date=today, balance=amount))
+        else:
+            snap.balance = amount
+        acct.balance, acct.balance_date, acct.last_seen = amount, now, now
+        s.commit()
+        label = acct.label
+    return f"Updated '{label}' balance to ${amount:,.2f}."
+
+
+def delete_manual_account(account_id: str, settings: Settings | None = None) -> str:
+    """Delete a manual account and its snapshots. Only manual accounts can be deleted."""
+    with session(settings) as s:
+        acct = s.get(Account, account_id)
+        if acct is None:
+            raise ValueError(f"Unknown account {account_id!r}")
+        if acct.source != "manual":
+            raise ValueError("Only manual accounts can be deleted. Hide synced accounts instead.")
+        label = acct.label
+        s.execute(delete(BalanceSnapshot).where(BalanceSnapshot.account_id == account_id))
+        s.execute(delete(HoldingSnapshot).where(HoldingSnapshot.account_id == account_id))
+        s.execute(delete(Transaction).where(Transaction.account_id == account_id))
+        s.delete(acct)
+        s.commit()
+    return f"Deleted manual account '{label}'."
 
 
 # --------------------------------------------------------------------------- Empower

@@ -75,7 +75,11 @@ def load(s: Session, account_ids: list[str] | None = None) -> tuple[pd.DataFrame
         a = accts[acct_id]
         col = wide[acct_id]
         last_snapshot = col.last_valid_index()
-        seen = pd.Timestamp(a.last_seen.date()) if a.last_seen else last_snapshot
+        # Manual accounts never disconnect: carry their last balance forward to the end of the range.
+        if a.source == "manual":
+            seen = days[-1]
+        else:
+            seen = pd.Timestamp(a.last_seen.date()) if a.last_seen else last_snapshot
         filled = col.ffill()
         filled[filled.index > max(last_snapshot, seen)] = float("nan")
         latest = float(col.loc[last_snapshot])

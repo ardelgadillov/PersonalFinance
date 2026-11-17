@@ -103,6 +103,18 @@ tests/                       # fixture JSON/CSV, no real data
    verified in a live HA instance (no Docker/Supervisor available in dev).
 
 # My test/changes
-1. is it possible to create a manual account? 
-2. Chashflow, This year is comparing with febraury last year, it should compare the same month
-3. Performance chart is only being updated since the creation/first sync with simplefin
+1. ✅ Manual accounts: added balance-only accounts you maintain by hand (Settings → Accounts → "Add a
+   manual account": name, type, balance, in-net-worth). Edit the Balance cell to record a new value for today;
+   select the row and Delete to remove it. They flow into net worth (liability types count as debt), carry
+   their last balance forward, and never auto-disconnect. (`services.create_manual_account` /
+   `update_manual_balance` / `delete_manual_account`; `source="manual"`.)
+2. ✅ Cash flow comparison line: year-to-date now compares against the SAME calendar months one year earlier
+   (was an equal-length window shifted by the YTD length, so January lined up with last February). Whole-year
+   periods (12m/24m/last year) keep the prior equal-length window, which is already calendar-aligned.
+   (`cashflow.py::_prev_cumnet`.)
+3. ✅ Optimizer "Ticker performance" -> "Performance vs market": instead of one clicked ticker, the chart now
+   overlays the account's portfolio (its current mix, or the max-Sharpe mix when there is no current one), the
+   clicked ticker (optional), and a selectable market benchmark (S&P 500 default; VTI / QQQ / VT / AGG), all as
+   cumulative total return over the optimizer's in-sample window on the same dividend-adjusted basis. The
+   Investments page performance chart was left as-is (it already narrows to the selected period; it can only
+   start at the first sync, since balance/holding history begins there). (`optimizer.py::ticker_performance`.)

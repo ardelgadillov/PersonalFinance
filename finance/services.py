@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import datetime as dt
 import json
+import logging
 import re
 import threading
 import uuid
@@ -32,8 +33,16 @@ from finance.models import (
     utcnow,
 )
 
+log = logging.getLogger(__name__)
+
 _init_lock = threading.Lock()
 _initialized: set[str] = set()
+
+# Empower imports are heavy (parse + stage + link + apply). Serialize them so a
+# double-fired upload (or two browser tabs) can't run two imports of the same file
+# at once - that race was inserting the same empower_rows twice and crashing with a
+# UNIQUE constraint error. With the lock the second import is a safe no-op re-import.
+_empower_import_lock = threading.Lock()
 
 
 def engine_for(settings: Settings | None = None):
@@ -355,13 +364,23 @@ def import_empower_upload(contents: str, filename: str, settings: Settings | Non
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     path = settings.import_dir / f"{stamp}_{safe_filename(filename)}"
     path.write_bytes(data)
-    with session(settings) as s:
-        try:
-            r = import_empower_file(s, path)
-        except EmpowerImportError as exc:
-            s.rollback()
-            return UploadResult(False, f"Import failed: {exc}", [])
-        s.commit()
+    log.info("Empower import: %s (%d bytes) saved to %s", filename, len(data), path.name)
+    with _empower_import_lock:  # never run two imports at once (see note above)
+        with session(settings) as s:
+            try:
+                r = import_empower_file(s, path)
+                s.commit()
+            except EmpowerImportError as exc:
+                s.rollback()
+                log.warning("Empower import rejected (%s): %s", filename, exc)
+                return UploadResult(False, f"Import failed: {exc}", [])
+            except Exception:  # keep the UI responsive instead of returning an HTTP 500
+                s.rollback()
+                log.exception("Empower import failed (%s)", filename)
+                return UploadResult(
+                    False, "Import failed unexpectedly. See the application log for details.", [])
+    log.info("Empower import ok (%s): %d read, %d new, %d updated, %d removed",
+             filename, r.rows_read, r.staged_new, r.staged_updated, r.staged_removed)
     details = [
         f"{r.rows_read} rows read (date format {r.date_format}"
         f"{', amounts sign-flipped' if r.flipped_sign else ''}); "
@@ -378,6 +397,20 @@ def import_empower_upload(contents: str, filename: str, settings: Settings | Non
         details.append("Empower categories with no app category: "
                        + ", ".join(f"{n} ({c})" for n, c in r.unmapped))
     return UploadResult(True, f"Imported {path.name}", details)
+
+
+def read_app_log(lines: int = 200, settings: Settings | None = None) -> str:
+    """Return the last ``lines`` lines of the application log (newest last)."""
+    settings = settings or get_settings()
+    path = settings.log_file
+    if not path.exists():
+        return "No log file yet."
+    try:
+        with path.open(encoding="utf-8", errors="replace") as f:
+            tail = f.readlines()[-lines:]
+    except OSError as exc:  # pragma: no cover - depends on the filesystem
+        return f"Could not read log: {exc}"
+    return "".join(tail).strip() or "Log is empty."
 
 
 # --------------------------------------------------------------------------- categories

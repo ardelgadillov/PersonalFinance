@@ -53,8 +53,12 @@ class SyncManager:
         return True
 
     def _run(self, full: bool, settings: Settings) -> None:
+        log.info("Sync started (%s)", "full" if full else self.state.trigger)
         try:
             result = run_sync(settings=settings, full=full)
+            log.info("Sync finished: status=%s, %d request(s), %d new, %d updated",
+                     result.status, getattr(result, "requests", 0) or 0,
+                     getattr(result, "new", 0) or 0, getattr(result, "updated", 0) or 0)
         except Exception as exc:  # run_sync already logs; never kill the thread silently
             log.exception("Background sync failed")
             result = SyncResult(status="error", mode="full" if full else "?", errors=[str(exc)])

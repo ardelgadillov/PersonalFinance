@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, callback, ctx, dcc, html, no_update
+from dash import Input, Output, State, callback, clientside_callback, ctx, dcc, html, no_update
 
 from finance import services
 from finance.app.components import alert, editable, grid, message, money_col, panel
@@ -24,6 +24,7 @@ def layout() -> html.Div:
             dbc.Tab(label="Categories", tab_id="categories"),
             dbc.Tab(label="Empower import", tab_id="empower"),
             dbc.Tab(label="Sync log", tab_id="synclog"),
+            dbc.Tab(label="Logs", tab_id="logs"),
         ]),
         html.Div(id="settings-content"),
     ])
@@ -33,7 +34,8 @@ def layout() -> html.Div:
           Input("settings-tabs", "active_tab"), Input("sync-version", "data"))
 def render_tab(tab: str, _version):
     return {"accounts": accounts_tab, "empower": empower_tab,
-            "categories": categories_tab, "synclog": synclog_tab}.get(tab, accounts_tab)()
+            "categories": categories_tab, "synclog": synclog_tab,
+            "logs": logs_tab}.get(tab, accounts_tab)()
 
 
 # --------------------------------------------------------------------------- accounts
@@ -346,15 +348,15 @@ def _links_grid(rows, options):
 
 def empower_tab() -> html.Div:
     rows, options = services.empower_link_rows()
-    upload = dcc.Loading(dcc.Upload(
+    upload = dcc.Upload(
         id="empower-upload", multiple=False, accept=".csv", className="upload-zone",
         children=html.Div([html.I(className="bi bi-upload"),
                            "Drag and drop the Empower CSV here, or ", html.A("browse")]),
-    ))
+    )
     autolink_btn = dbc.Button("Auto-link confident matches", id="autolink-btn", size="sm", color="primary",
                               outline=True)
     return html.Div([
-        message("empower-msg"),
+        dcc.Loading(message("empower-msg")),  # spinner while the import callback runs
         panel("Import Empower transactions", upload,
               subtitle="In Empower: Transactions, date range All, Download CSV "
                        "(Date, Account, Description, Category, Tags, Amount). Re-importing is safe."),
@@ -367,16 +369,27 @@ def empower_tab() -> html.Div:
     ])
 
 
+# Disable the drop zone the instant a file is selected, so a second click can't start
+# a second import (the server also serializes imports, so this is only a UX guard).
+clientside_callback(
+    "function(contents){ return contents ? true : false; }",
+    Output("empower-upload", "disabled"),
+    Input("empower-upload", "contents"),
+    prevent_initial_call=True,
+)
+
+
 @callback(Output("empower-msg", "children"), Output("links-container", "children", allow_duplicate=True),
+          Output("empower-upload", "disabled", allow_duplicate=True),
           Input("empower-upload", "contents"), State("empower-upload", "filename"),
           prevent_initial_call=True)
 def upload_empower(contents, filename):
     if not contents:
-        return no_update, no_update
+        return no_update, no_update, False
     res = services.import_empower_upload(contents, filename)
     rows, options = services.empower_link_rows()
     msg = alert(res.message, "success" if res.ok else "danger", res.details, duration=None)
-    return msg, _links_grid(rows, options) if rows else no_update
+    return msg, (_links_grid(rows, options) if rows else no_update), False  # re-enable when done
 
 
 @callback(Output("empower-msg", "children", allow_duplicate=True),
@@ -432,6 +445,27 @@ def synclog_tab() -> html.Div:
                        "SimpleFIN Bridge allows about 24 requests per day.",
               actions=full_btn),
     ])
+
+
+# --------------------------------------------------------------------------- logs
+def logs_tab() -> html.Div:
+    refresh_btn = dbc.Button([html.I(className="bi bi-arrow-clockwise me-1"), "Refresh"],
+                             id="log-refresh", size="sm", color="primary", outline=True)
+    return html.Div([
+        panel("Application log",
+              html.Pre(services.read_app_log(), id="log-content",
+                       style={"maxHeight": "560px", "overflow": "auto", "whiteSpace": "pre-wrap",
+                              "fontSize": "0.8rem", "marginBottom": 0}),
+              subtitle="The most recent activity and any errors. The full log is kept in "
+                       "logs/finance.log in the data directory (rotated across a few files).",
+              actions=refresh_btn),
+    ])
+
+
+@callback(Output("log-content", "children"), Input("log-refresh", "n_clicks"),
+          prevent_initial_call=True)
+def refresh_log(_n):
+    return services.read_app_log()
 
 
 @callback(Output("synclog-msg", "children"), Input("full-sync-confirm", "submit_n_clicks"),

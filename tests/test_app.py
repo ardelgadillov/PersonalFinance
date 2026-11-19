@@ -153,7 +153,7 @@ def test_every_callback_id_exists_in_its_view(demo):
         (optimizer.layout(), None, []),
         (transactions.layout(), lambda t: transactions.render_tab(t, 0)[0], ["list", "transfers", "rules"]),
         (settings_page.layout(), lambda t: settings_page.render_tab(t, 0),
-         ["accounts", "categories", "empower", "synclog"]),
+         ["accounts", "categories", "empower", "synclog", "logs"]),
     ):
         page = _ids(page_layout)
         tab_ids = {t: _ids(render(t)) for t in tabs}

@@ -182,6 +182,8 @@ def create_app() -> dash.Dash:
 
 
 def run(host: str = "127.0.0.1", port: int = 8050, debug: bool = False, startup_sync: bool = True) -> None:
+    from finance.logging_setup import configure_logging
+    configure_logging()
     app = create_app()
     if startup_sync:
         if sync_manager.start_if_stale():
@@ -191,8 +193,10 @@ def run(host: str = "127.0.0.1", port: int = 8050, debug: bool = False, startup_
     hour = os.getenv("FINANCE_DAILY_SYNC_HOUR", "").strip()
     if hour:
         sync_manager.schedule_daily(int(hour), settings=settings)
-    print(f"Personal Finance running at http://{host}:{port}  (data: {settings.data_dir}"
-          f"{', DEMO' if settings.demo else ''})")
+    banner = (f"Personal Finance running at http://{host}:{port}  (data: {settings.data_dir}"
+              f"{', DEMO' if settings.demo else ''})")
+    print(banner)
+    log.info(banner)
     if debug:
         # Flask/werkzeug dev server: live tracebacks for development (no reloader - it would
         # start two background syncs). Prints the "development server" warning; that is expected.

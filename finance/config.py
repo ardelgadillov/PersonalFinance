@@ -44,6 +44,14 @@ class Settings:
     def import_dir(self) -> Path:
         return self.data_dir / "import"
 
+    @property
+    def log_dir(self) -> Path:
+        return self.data_dir / "logs"
+
+    @property
+    def log_file(self) -> Path:
+        return self.log_dir / "finance.log"
+
 
 def get_settings() -> Settings:
     demo = os.getenv("FINANCE_DEMO", "").strip().lower() in TRUTHY

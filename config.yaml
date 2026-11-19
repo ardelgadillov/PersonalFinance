@@ -3,7 +3,7 @@
 name: Personal Finance
 version: "0.1.0"
 slug: personalfinance
-description: Personal finance tracker (SimpleFIN + Empower): cash flow, net worth, investments.
+description: "Personal finance tracker (SimpleFIN + Empower): cash flow, net worth, investments."
 url: https://github.com/ardelgadillov/PersonalFinance
 # Built locally for whatever architecture your Home Assistant host runs.
 arch:

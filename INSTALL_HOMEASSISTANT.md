@@ -8,11 +8,18 @@ private folder called `/data` that survives restarts, reboots and updates.
 The steps below assume you have **never installed a Home Assistant add-on before**. Follow them in
 order and you'll be fine. Each step says exactly where to click.
 
+> **"Add-ons" is now called "Apps".**
+> In Home Assistant **2026.2** (February 2026) the **Add-ons** section was renamed **Apps**. It's
+> only a name change — local add-ons still install and work exactly the same way. In this guide,
+> wherever you see "Add-on Store" / "Add-ons", your menu may say **"App Store" / "Apps"**; they are
+> the same thing. The one place it matters is the **Samba share**, which was renamed from `addons`
+> to **`local_apps`** (see Step 1).
+
 > **Do you have the right kind of Home Assistant?**
 > This only works on **Home Assistant OS** or **Home Assistant Supervised** — the versions that
-> have an **Add-on Store** (look in **Settings → Add-ons**; if you see an "Add-on Store" button,
-> you're good). If you installed the "Home Assistant Container" (a plain Docker image) there is no
-> add-on store, and you should skip to the **Plain Docker** section at the very bottom instead.
+> have an **App Store / Add-on Store** (look in **Settings → Apps** (or **Add-ons**); if you see a
+> store button, you're good). If you installed the "Home Assistant Container" (a plain Docker image)
+> there is no store, and you should skip to the **Plain Docker** section at the very bottom instead.
 
 > **Quick answer to a common question: do I need a `.env` file here?**
 > **No.** The `.env` file is only for running the app on your own PC. In Home Assistant you type
@@ -24,59 +31,86 @@ order and you'll be fine. Each step says exactly where to click.
 
 ## Step 1 — Copy the project files into Home Assistant
 
-Home Assistant looks for local add-ons in a folder called `addons`. You need to put this whole
+Home Assistant looks for local add-ons in its **local apps** folder. You need to put this whole
 project inside it, in a subfolder named exactly `personalfinance`.
 
-When you're done, the file `config.yaml` from this project must end up at this exact location:
-`addons/personalfinance/config.yaml`. That path is what makes Home Assistant notice the add-on, so
-double-check it before moving on.
+When you're done, the file `config.yaml` from this project must end up **directly** in that
+subfolder — over the network share: `local_apps\personalfinance\config.yaml`; from a terminal:
+`/addons/personalfinance/config.yaml` (the terminal path is still `/addons`). That path is what
+makes Home Assistant notice the add-on, so double-check it before moving on.
+
+> **Two names, one folder.** The network (Samba) share used to be called `addons` and is now
+> `local_apps` (the old `addons` share still works but is deprecated). Inside the terminal the path
+> is unchanged — still `/addons`. So you clone into `/addons` over SSH, and you see it as
+> `local_apps` over the network. Do **not** create an extra nested folder (a common mistake is
+> ending up with `local_apps\personalfinance\PersonalFinance\config.yaml` — one level too deep).
 
 Pick **one** of the two ways below. If you're not comfortable with a command line, use Option A.
 
 ### Option A — Using Samba (drag-and-drop over the network, no commands)
 
-1. In Home Assistant, go to **Settings → Add-ons → Add-on Store**.
+1. In Home Assistant, go to **Settings → Apps → App Store** (older versions: **Add-ons → Add-on Store**).
 2. Find **Samba share** in the list, click it, click **Install**, then **Start** it.
    (Open its **Configuration** tab first if it asks you to set a username/password.)
 3. On your Windows PC, open **File Explorer** and type this into the address bar at the top, then
-   press Enter: `\\homeassistant\addons`
+   press Enter: `\\homeassistant\local_apps`
    (If that doesn't open, replace `homeassistant` with your Home Assistant's IP address, for
-   example `\\192.168.1.50\addons`. You can find the IP in **Settings → System → Network**.)
-4. Inside that shared `addons` folder, create a **new folder** named `personalfinance`.
+   example `\\192.168.1.50\local_apps`. You can find the IP in **Settings → System → Network**.
+   On older Home Assistant the share is named `addons` instead.)
+4. Inside that shared `local_apps` folder, create a **new folder** named `personalfinance`.
 5. Copy **every file and folder from this project** into that new `personalfinance` folder — the
    whole thing, including `config.yaml`, `Dockerfile`, the `finance` folder, and so on.
-   When finished you should see `addons\personalfinance\config.yaml` over the network share.
+   When finished you should see `local_apps\personalfinance\config.yaml` over the network share —
+   with `config.yaml` directly inside, not inside a second nested folder.
 
 ### Option B — Using the command line (clones the latest code from GitHub)
 
-1. In the **Add-on Store**, install **Advanced SSH & Web Terminal** and **Start** it, then open
-   its **Terminal** (the "Open Web UI" button, or the **Terminal** item in the sidebar).
-2. Type these two commands:
+1. In the **App Store / Add-on Store**, install **Advanced SSH & Web Terminal** and **Start** it,
+   then open its **Terminal** (the "Open Web UI" button, or the **Terminal** item in the sidebar).
+2. Type these commands. Make sure the target folder does **not** already exist first, so you don't
+   get a double-nested clone:
    ```bash
    cd /addons
+   rm -rf personalfinance            # only if a leftover/empty folder is there
    git clone https://github.com/ardelgadillov/PersonalFinance.git personalfinance
+   ls personalfinance/config.yaml    # must print the path, not "No such file"
    ```
 3. Later, when you want the newest version, run:
    ```bash
    cd /addons/personalfinance && git pull
    ```
 
+> **Note:** the **"Add repository"** button in the store does **not** work for this project. That
+> button is only for *repositories that bundle several add-ons* (they need a `repository.yaml` at
+> the repo root). This project is a single add-on, so adding its GitHub URL there gives
+> *"not a valid repository"* — that's expected. Use the local install above instead.
+
 ---
 
 ## Step 2 — Install the add-on
 
-1. Go to **Settings → Add-ons → Add-on Store**.
+1. Go to **Settings → Apps → App Store** (older versions: **Add-ons → Add-on Store**).
 2. In the **top-right corner**, click the **⋮** (three-dots menu) → **Check for updates**. Then
    **refresh the browser page** (press F5).
-3. Scroll down. You should now see a new section called **Local add-ons** with **Personal Finance**
-   inside it. Click it, then click **Install**.
+3. Scroll down. You should now see a section called **Local apps** (older versions: **Local add-ons**)
+   with **Personal Finance** inside it. Click it, then click **Install**.
    - The **first install takes several minutes** — Home Assistant is compiling the Python
      environment. This is normal; let it finish. (If you want to watch, the **Log** tab shows
      progress.)
 
-> **Don't see a "Local add-ons" section?** It almost always means the files aren't in the right
-> place. Go back to Step 1 and confirm the file is exactly at `addons/personalfinance/config.yaml`
-> (not `addons/PersonalFinance/...` or an extra nested folder).
+> **Don't see a "Local apps" section, even after Check for updates + F5?** Work through these:
+> 1. **Confirm the path.** The file must be exactly at `/addons/personalfinance/config.yaml`
+>    (over the share: `local_apps\personalfinance\config.yaml`) — **not** `.../PersonalFinance/...`
+>    inside a second nested folder. In the SSH terminal: `ls /addons/personalfinance/config.yaml`.
+> 2. **Force a full rescan** from the SSH terminal (more reliable than the menu button):
+>    ```bash
+>    ha addons reload
+>    ```
+>    then refresh the browser.
+> 3. **Check the Supervisor log.** A mistake in `config.yaml` makes Home Assistant skip the add-on
+>    *silently* — no error in the store, just nothing shown. Look at **Settings → System → Logs**,
+>    choose **Supervisor** from the dropdown (or run `ha supervisor logs` in the terminal), and
+>    search for `personalfinance`. The reason it was rejected will be there.
 
 ---
 
@@ -124,11 +158,15 @@ equivalent of `.env`.
 
 ## Updating to a newer version later
 
-1. Get the new files into `/addons/personalfinance`:
+1. Get the new files into `/addons/personalfinance` (over the share: `local_apps\personalfinance`):
    - If you used **Samba**: copy the new files over the old ones.
-   - If you used **SSH**: run `cd /addons/personalfinance && git pull`.
-2. In the **Add-on Store**, click **⋮ → Check for updates**, open **Personal Finance**, and click
-   **Rebuild**.
+   - If you used **SSH**: pull the latest code and have Home Assistant rescan the folder:
+     ```bash
+     cd /addons/personalfinance && git pull
+     ha addons reload
+     ```
+2. In the **App Store / Add-on Store**, click **⋮ → Check for updates**, open **Personal Finance**,
+   and click **Rebuild**.
 
 Your `/data` (database and imports) is left untouched by a rebuild, so you won't lose anything.
 
@@ -144,8 +182,14 @@ Your `/data` (database and imports) is left untouched by a rebuild, so you won't
 - **The build fails while compiling `numpy` or `pandas`.** Check that `build.yaml` still points at
   `python:3.13-slim` (a Debian base). An Alpine base would try to compile those from source and
   fail.
-- **No "Local add-ons" section appears.** The files aren't at `/addons/personalfinance/config.yaml`,
-  or you're on a Container-only install that has no add-on store (see Plain Docker below).
+- **No "Local apps" / "Local add-ons" section appears.** Usually one of: the files aren't exactly at
+  `/addons/personalfinance/config.yaml` (check for an extra nested folder); the store hasn't
+  rescanned (run `ha addons reload` in the SSH terminal, then refresh); `config.yaml` has an error so
+  Supervisor skipped it silently (check `ha supervisor logs` for `personalfinance`); or you're on a
+  Container-only install with no store (see Plain Docker below).
+- **"Not a valid repository" when adding the GitHub URL.** The **Add repository** button is only for
+  multi-add-on repositories (those have a `repository.yaml` at the root). This is a single add-on, so
+  that's expected — install it locally (Step 1) instead.
 
 ---
 

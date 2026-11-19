@@ -1,6 +1,11 @@
 # Base image per architecture for the Home Assistant add-on builder.
 # python:3.13-slim is Debian-based, so pandas/numpy/scipy/plotly install from prebuilt
 # wheels (an Alpine/musl base would try to compile them and is far slower / can fail).
+#
+# NOTE: the new HA "Apps" builder (HA 2026.2+) IGNORES this build_from and injects
+# BUILD_FROM=ghcr.io/home-assistant/base:latest (Alpine). The Dockerfile therefore pins
+# python:3.13-slim itself and does not rely on this file. It is kept for older Supervisor
+# versions (and `docker build .`) that still honour build.yaml.
 build_from:
   aarch64: python:3.13-slim
   amd64: python:3.13-slim

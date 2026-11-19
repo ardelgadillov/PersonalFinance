@@ -179,9 +179,12 @@ Your `/data` (database and imports) is left untouched by a rebuild, so you won't
   Make sure `hassio_api: true` is present in `config.yaml`. As a fallback you can expose a direct
   port: add a `ports:` entry to `config.yaml` (for example `"8099/tcp": 8099`), rebuild, and open
   `http://<your-HA-IP>:8099` in a browser.
-- **The build fails while compiling `numpy` or `pandas`.** Check that `build.yaml` still points at
-  `python:3.13-slim` (a Debian base). An Alpine base would try to compile those from source and
-  fail.
+- **The build fails while compiling `numpy` or `pandas`, or with `apt-get: not found`.** The base
+  image must be Debian (`python:3.13-slim`), not Alpine. On Home Assistant **2026.2+** the new
+  **Apps** builder ignores `build.yaml` and tries to build on the Alpine `ghcr.io/home-assistant/base`
+  image — which has no `apt-get` and would compile numpy/pandas from source. The `Dockerfile` guards
+  against this by pinning `FROM python:3.13-slim` itself, so make sure you have the latest `Dockerfile`
+  from this project (pull the newest files and **Rebuild**).
 - **No "Local apps" / "Local add-ons" section appears.** Usually one of: the files aren't exactly at
   `/addons/personalfinance/config.yaml` (check for an extra nested folder); the store hasn't
   rescanned (run `ha addons reload` in the SSH terminal, then refresh); `config.yaml` has an error so

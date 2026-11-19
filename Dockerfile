@@ -1,8 +1,12 @@
 # Home Assistant add-on image for Personal Finance.
-# BUILD_FROM is supplied by the Supervisor builder (see build.yaml); the default lets you
-# also build it by hand with `docker build .`.
-ARG BUILD_FROM=python:3.13-slim
-FROM ${BUILD_FROM}
+# We pin a Debian base (python:3.13-slim) directly instead of honouring the builder's
+# BUILD_FROM. The new HA "Apps" builder (HA 2026.2+) ignores build.yaml's build_from and
+# injects BUILD_FROM=ghcr.io/home-assistant/base:latest, which is Alpine/musl -- there
+# apt-get is missing and pandas/numpy/scipy would compile from source (slow / failing).
+# python:3.13-slim is multi-arch (aarch64/amd64/armv7), so this works on every HA host.
+# Any BUILD_FROM the builder passes is accepted as a harmless unused build arg.
+ARG BUILD_FROM
+FROM python:3.13-slim
 
 ENV FINANCE_DATA_DIR=/data \
     PYTHONUNBUFFERED=1 \

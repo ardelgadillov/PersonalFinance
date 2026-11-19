@@ -1,0 +1,154 @@
+WARNING:finance.background:Daily sync not scheduled: SIMPLEFIN_ACCESS_URL is not set in .env
+Personal Finance running at http://0.0.0.0:8099  (data: /data)
+WARNING:finance.app.main:Last sync is old: started a background sync
+Personal Finance running at http://0.0.0.0:8099  (data: /data)
+WARNING:waitress.queue:Task queue depth is 1
+WARNING:waitress.queue:Task queue depth is 2
+WARNING:waitress.queue:Task queue depth is 1
+WARNING:waitress.queue:Task queue depth is 1
+(sqlite3.IntegrityError) UNIQUE constraint failed: empower_rows.id
+[SQL: INSERT INTO empower_rows (id, account_name, date, description, category, tags, amount, file_name, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: [('emp-66b1af6d8ec49ebf4d7a', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-01-09', 'Recurring Contribution Dc College Savings 2037 Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 33.3, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678136'), ('emp-49e8e3c224b99a22f2b3', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-01-09', 'Recurring Contribution U.s. Large Cap Equity Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 16.65, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678166'), ('emp-df016be284ccb36c6173', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-01-09', 'Recurring Contribution U.s. Small Cap Equity Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 16.65, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678175'), ('emp-158c0015b99bea487d18', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-01-09', 'Recurring Contribution U.s. Socially Responsible Equity Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 33.3, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678182'), ('emp-21724c90948e7f8ba55b', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-01-09', 'Recurring Contribution U.s. Total Stock Market Index Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 233.1, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678189'), ('emp-85325a8a433989ec99b9', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-02-09', 'Recurring Contribution Dc College Savings 2037 Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 33.3, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678196'), ('emp-17dbd33fc24ea8543964', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-02-09', 'Recurring Contribution U.s. Large Cap Equity Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 16.65, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678202'), ('emp-3ff2149458d14292dfb8', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-02-09', 'Recurring Contribution U.s. Small Cap Equity Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 16.65, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678208')  ... displaying 10 of 20800 total bound parameter sets ...  ('emp-01fcd205723f6c3686b5', 'Zelestra 401(k) Plan ( X N - Ending in 376n', '2026-11-17', 'Pim Rae Us S I - Contribution', 'Retirement Contributions', None, 33.67, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.812381'), ('emp-9b240ed5ed740e54b291', 'Zelestra 401(k) Plan ( X N - Ending in 376n', '2026-11-17', 'Vg Ms Mdcpvl Idx Adm - Contribution', 'Retirement Contributions', None, 112.21, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.812387')]]
+(Background on this error at: https://sqlalche.me/e/21/gkpj)
+ERROR:finance.app.main:Exception on /_dash-update-component [POST]
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1946, in _exec_single_context
+    self.dialect.do_executemany(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor,
+        ^^^^^^^
+    ...<2 lines>...
+        context,
+        ^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 1189, in do_executemany
+    cursor.executemany(statement, parameters)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.IntegrityError: UNIQUE constraint failed: empower_rows.id
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/usr/local/lib/python3.13/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/usr/local/lib/python3.13/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/usr/local/lib/python3.13/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/dash/backends/_flask.py", line 387, in _dispatch
+    response_data = ctx.run(partial_func)
+  File "/usr/local/lib/python3.13/site-packages/dash/_callback.py", line 1005, in add_context
+    raise err
+  File "/usr/local/lib/python3.13/site-packages/dash/_callback.py", line 995, in add_context
+    output_value = _invoke_callback(func, *func_args, **func_kwargs)  # type: ignore[reportArgumentType]
+  File "/usr/local/lib/python3.13/site-packages/dash/_callback.py", line 65, in _invoke_callback
+    return func(*args, **kwargs)  # %% callback invoked %%
+  File "/app/finance/app/pages/settings.py", line 376, in upload_empower
+    res = services.import_empower_upload(contents, filename)
+  File "/app/finance/services.py", line 360, in import_empower_upload
+    r = import_empower_file(s, path)
+  File "/app/finance/importers/empower.py", line 520, in import_empower_file
+    new, updated, removed = stage_rows(s, parsed, path.name)
+                            ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/finance/importers/empower.py", line 185, in stage_rows
+    s.flush()
+    ~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/session.py", line 4626, in flush
+    self._flush(objects)
+    ~~~~~~~~~~~^^^^^^^^^
+  File "<sqlalchemy generated warned() wrapper for sqlalchemy.orm.session.Session._flush>", line 2, in _flush
+    return target(fn, self, objects=objects)
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/util/deprecations.py", line 281, in warned
+    return fn(*args, **kwargs)  # type: ignore[no-any-return]
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/session.py", line 4769, in _flush
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/util/langhelpers.py", line 166, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/session.py", line 4730, in _flush
+    flush_context.execute()
+    ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/unitofwork.py", line 467, in execute
+    rec.execute(self)
+    ~~~~~~~~~~~^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/unitofwork.py", line 643, in execute
+    util.preloaded.orm_persistence._save_obj(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.mapper,
+        ^^^^^^^^^^^^
+        uow.states_for_mapper_hierarchy(self.mapper, False, False),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        uow,
+        ^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/persistence.py", line 92, in _save_obj
+    _emit_insert_statements(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        base_mapper,
+        ^^^^^^^^^^^^
+    ...<3 lines>...
+        insert,
+        ^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/orm/persistence.py", line 1065, in _emit_insert_statements
+    result = connection.execute(
+        statement, multiparams, execution_options=execution_options
+    )
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1494, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/sql/elements.py", line 534, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1714, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<9 lines>...
+        param_dict=param_dict,
+    )
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1868, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1996, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 2351, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/base.py", line 1946, in _exec_single_context
+    self.dialect.do_executemany(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor,
+        ^^^^^^^
+    ...<2 lines>...
+        context,
+        ^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/site-packages/sqlalchemy/engine/default.py", line 1189, in do_executemany
+    cursor.executemany(statement, parameters)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) UNIQUE constraint failed: empower_rows.id
+[SQL: INSERT INTO empower_rows (id, account_name, date, description, category, tags, amount, file_name, imported_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)]
+[parameters: [('emp-66b1af6d8ec49ebf4d7a', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-01-09', 'Recurring Contribution Dc College Savings 2037 Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 33.3, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678136'), ('emp-49e8e3c224b99a22f2b3', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-01-09', 'Recurring Contribution U.s. Large Cap Equity Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 16.65, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678166'), ('emp-df016be284ccb36c6173', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-01-09', 'Recurring Contribution U.s. Small Cap Equity Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 16.65, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678175'), ('emp-158c0015b99bea487d18', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-01-09', 'Recurring Contribution U.s. Socially Responsible Equity Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 33.3, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678182'), ('emp-21724c90948e7f8ba55b', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-01-09', 'Recurring Contribution U.s. Total Stock Market Index Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 233.1, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678189'), ('emp-85325a8a433989ec99b9', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-02-09', 'Recurring Contribution Dc College Savings 2037 Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 33.3, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678196'), ('emp-17dbd33fc24ea8543964', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-02-09', 'Recurring Contribution U.s. Large Cap Equity Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 16.65, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678202'), ('emp-3ff2149458d14292dfb8', 'Adma R Delgadillo Nutting - Ending in 5301', '2024-02-09', 'Recurring Contribution U.s. Small Cap Equity Portfolio Contribution Year: 2024', 'Retirement Contributions', None, 16.65, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.678208')  ... displaying 10 of 20800 total bound parameter sets ...  ('emp-01fcd205723f6c3686b5', 'Zelestra 401(k) Plan ( X N - Ending in 376n', '2026-11-17', 'Pim Rae Us S I - Contribution', 'Retirement Contributions', None, 33.67, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.812381'), ('emp-9b240ed5ed740e54b291', 'Zelestra 401(k) Plan ( X N - Ending in 376n', '2026-11-17', 'Vg Ms Mdcpvl Idx Adm - Contribution', 'Retirement Contributions', None, 112.21, '20261119-163056_2016-01-01_thru_2026-11-19_transactions.csv', '2026-11-19 21:31:22.812387')]]
+(Background on this error at: https://sqlalche.me/e/21/gkpj)

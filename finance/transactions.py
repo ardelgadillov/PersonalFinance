@@ -72,6 +72,9 @@ class TxnFilter:
     account_ids: list[str] = field(default_factory=list)
     category_ids: list[int] = field(default_factory=list)  # UNCATEGORIZED (0) = no category
     search: str | None = None
+    exclude_transfers: bool = False  # drop confirmed transfer pairs and transfer-group categories
+    exclude_hidden: bool = False  # drop hidden accounts (ignored when account_ids is given)
+    exclude_types: tuple[str, ...] = ()  # drop these account types (ignored when account_ids is given)
 
 
 def _amount_from(text: str) -> float | None:
@@ -113,6 +116,16 @@ def query(s: Session, f: TxnFilter, limit: int | None = None) -> list[dict]:
         q = q.where(Transaction.date <= f.end)
     if f.account_ids:
         q = q.where(Transaction.account_id.in_(f.account_ids))
+    else:
+        if f.exclude_hidden:
+            q = q.where(Transaction.account_id.not_in(select(Account.id).where(Account.hidden.is_(True))))
+        if f.exclude_types:
+            q = q.where(Transaction.account_id.not_in(
+                select(Account.id).where(Account.type.in_(f.exclude_types))))
+    if f.exclude_transfers:
+        transfer_cats = select(Category.id).where(Category.group == "transfer")
+        q = q.where(Transaction.transfer_pair_id.is_(None),
+                    or_(Transaction.category_id.is_(None), Transaction.category_id.not_in(transfer_cats)))
     if f.category_ids:
         ids = [c for c in f.category_ids if c != UNCATEGORIZED]
         conds = [Transaction.category_id.in_(ids)] if ids else []

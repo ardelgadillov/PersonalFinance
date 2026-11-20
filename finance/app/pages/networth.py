@@ -1,4 +1,8 @@
-"""Net worth page: KPIs, assets and debts over time by group, monthly change, composition, accounts."""
+"""Net worth page: KPIs, assets and debts over time by group, composition, accounts.
+
+Selecting an account in the accounts table swaps the "Net worth over time" chart to that account's
+balance history; "Show all accounts" (or clearing the selection) returns to the stacked total.
+"""
 from __future__ import annotations
 
 import datetime as dt
@@ -6,7 +10,7 @@ import datetime as dt
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.graph_objects as go
-from dash import Input, Output, callback, ctx, dcc, html
+from dash import Input, Output, callback, ctx, dcc, get_relative_path, html
 from dash.exceptions import PreventUpdate
 
 from finance import networth as nw
@@ -60,22 +64,20 @@ def layout() -> html.Div:
     ]
     return html.Div([
         dbc.Alert(["Some accounts have no type yet, so they are grouped by the sign of their balance. ",
-                   dcc.Link("Set types in Settings", href="/settings")],
+                   dcc.Link("Set types in Settings", href=get_relative_path("/settings"))],
                   color="warning", className="py-2") if untyped else None,
         filters,
         html.Div(id="nw-kpis", className="stat-strip mb-3"),
         dbc.Row([
             dbc.Col(panel("Net worth over time", _graph("nw-history", 420),
-                          subtitle=html.Span(id="nw-history-subtitle")), lg=6),
+                          subtitle=html.Span(id="nw-history-subtitle"),
+                          actions=dbc.Button([html.I(className="bi bi-arrow-left me-1"), "Show all accounts"],
+                                             id="nw-history-clear", color="secondary", outline=True, size="sm",
+                                             style={"display": "none"})), lg=6),
             dbc.Col(_accounts_section(account_cols), lg=6),
         ], className="g-3"),
-        dbc.Row([
-            dbc.Col(panel("Change by month", _graph("nw-monthly", 300),
-                          subtitle="Net worth at month end compared with the previous month end."), lg=7),
-            dbc.Col(panel("Composition", _graph("nw-composition", 300),
-                          subtitle="Balance by group at the end of the period."), lg=5),
-        ], className="g-3"),
-        panel(html.Span("Account history", id="nw-account-title"), _graph("nw-account", 300)),
+        panel("Composition", _graph("nw-composition", 300),
+              subtitle="Balance by group at the end of the period."),
         dcc.Store(id="nw-account-sel"),
     ])
 
@@ -139,23 +141,6 @@ def history_figure(groups: pd.DataFrame, theme) -> go.Figure:
     return fig
 
 
-def monthly_figure(m: pd.DataFrame, theme) -> go.Figure:
-    c = colors(theme)
-    if m.empty:
-        return empty_figure(theme, height=300)
-    bar_colors = [c["savings"] if v >= 0 else c["spending"] for v in m["change"]]
-    fig = go.Figure(go.Bar(
-        x=m["month"], y=m["change"], marker={"color": bar_colors, "cornerradius": 4},
-        customdata=m["net_worth"], name="Change",
-        hovertemplate="%{x|%B %Y}<br>%{y:+$,.0f}<br>Net worth %{customdata:$,.0f}<extra></extra>"))
-    fig.update_layout(**base_layout(theme, height=300, showlegend=False, bargap=0.3))
-    step = 1 if len(m) <= 8 else 2 if len(m) <= 16 else 3 if len(m) <= 30 else 6
-    fig.update_xaxes(tickformat="%b '%y", dtick=f"M{step}", tickangle=0)
-    fig.update_yaxes(tickprefix="$", tickformat="~s")
-    glow(fig, theme)
-    return fig
-
-
 def composition_figure(groups: pd.DataFrame, theme) -> go.Figure:
     c = colors(theme)
     if groups.empty:
@@ -195,15 +180,14 @@ def account_figure(series: pd.Series | None, label: str, group: str, theme) -> g
 
 # --------------------------------------------------------------------------- callbacks
 @callback(
-    [Output("nw-kpis", "children"), Output("nw-history", "figure"), Output("nw-history-subtitle", "children"),
-     Output("nw-monthly", "figure"), Output("nw-composition", "figure"), Output("nw-dates-col", "style")]
+    [Output("nw-kpis", "children"), Output("nw-composition", "figure"), Output("nw-dates-col", "style")]
     + [Output(f"nw-grid-{g}", "rowData") for g in GROUP_KEYS]
     + [Output(f"nw-acctitle-{g}", "children") for g in GROUP_KEYS]
     + [Output(f"nw-accpanel-{g}", "style") for g in GROUP_KEYS],
     [Input("nw-period", "value"), Input("nw-dates", "start_date"), Input("nw-dates", "end_date"),
      Input("nw-accounts", "value"), Input("theme", "data"), Input("sync-version", "data")])
 def update(period, start, end, accounts, theme, _version):
-    daily, accts, full = _load(period, start, end, accounts)
+    daily, accts, _full = _load(period, start, end, accounts)
     groups = nw.by_group(daily, accts)
     k = nw.kpis(groups)
     if k["start"]:
@@ -219,11 +203,6 @@ def update(period, start, end, accounts, theme, _version):
         _stat("Change", _money(k["change"], signed=True), change_hint,
               cls="" if k["change"] is None else "amount-neg" if k["change"] < 0 else "amount-pos"),
     ]
-    if full.empty:
-        subtitle = "History starts with the first sync: one balance snapshot per account per day."
-    else:
-        subtitle = (f"Debts are shown below zero; the line is net worth. History starts at the first sync "
-                    f"({full.index.min():%b %d, %Y}).")
     rows = nw.account_rows(daily, accts)
     by: dict[str, list] = {g: [] for g in GROUP_KEYS}
     for r in rows:
@@ -236,9 +215,33 @@ def update(period, start, end, accounts, theme, _version):
         total = sum(r["balance"] for r in grp if r.get("balance") is not None)
         titles.append(f"{GROUP_LABELS[g]}  {_money(total)}" if grp else GROUP_LABELS[g])
         styles.append({} if grp else {"display": "none"})
-    return ([kpis, history_figure(groups, theme), subtitle, monthly_figure(nw.monthly_change(groups), theme),
-             composition_figure(groups, theme), {} if period == "custom" else {"display": "none"}]
+    return ([kpis, composition_figure(groups, theme), {} if period == "custom" else {"display": "none"}]
             + row_data + titles + styles)
+
+
+@callback(Output("nw-history", "figure"), Output("nw-history-subtitle", "children"),
+          Output("nw-history-clear", "style"),
+          Input("nw-account-sel", "data"),
+          Input("nw-period", "value"), Input("nw-dates", "start_date"), Input("nw-dates", "end_date"),
+          Input("nw-accounts", "value"), Input("theme", "data"), Input("sync-version", "data"))
+def update_history(sel, period, start, end, accounts, theme, _version):
+    """Main chart: the full stacked net worth, or (when an account is selected) that one account."""
+    if sel:
+        daily, _ = services.read(nw.load, [sel["id"]])
+        daily = nw.clip(daily, *_range(period, start, end))
+        series = daily[sel["id"]] if sel["id"] in daily else None
+        name = f"{sel['account']}" + (f" ({sel['institution']})" if sel.get("institution") else "")
+        subtitle = html.Span([html.Strong(name),
+                              " balance history. Use “Show all accounts” to return to total net worth."])
+        return account_figure(series, sel["account"], sel.get("group_key") or "cash", theme), subtitle, {}
+    daily, accts, full = _load(period, start, end, accounts)
+    groups = nw.by_group(daily, accts)
+    if full.empty:
+        subtitle = "History starts with the first sync: one balance snapshot per account per day."
+    else:
+        subtitle = (f"Debts are shown below zero; the line is net worth. History starts at the first sync "
+                    f"({full.index.min():%b %d, %Y}).")
+    return history_figure(groups, theme), subtitle, {"display": "none"}
 
 
 @callback(Output("nw-account-sel", "data"),
@@ -249,20 +252,11 @@ def pick_account(*selections):
     if not isinstance(trig, str) or not trig.startswith("nw-grid-"):
         raise PreventUpdate
     sel = selections[GROUP_KEYS.index(trig[len("nw-grid-"):])]
-    if not sel:
-        raise PreventUpdate
-    return sel[0]
+    return sel[0] if sel else None
 
 
-@callback(Output("nw-account", "figure"), Output("nw-account-title", "children"),
-          Input("nw-account-sel", "data"),
-          Input("nw-period", "value"), Input("nw-dates", "start_date"), Input("nw-dates", "end_date"),
-          Input("theme", "data"), Input("sync-version", "data"))
-def update_account(row, period, start, end, theme, _version):
-    if not row:
-        return account_figure(None, "", "cash", theme), "Account history (click an account above)"
-    daily, _ = services.read(nw.load, [row["id"]])
-    daily = nw.clip(daily, *_range(period, start, end))
-    series = daily[row["id"]] if row["id"] in daily else None
-    title = f"{row['account']}" + (f" ({row['institution']})" if row.get("institution") else "")
-    return account_figure(series, row["account"], row.get("group_key") or "cash", theme), title
+@callback([Output(f"nw-grid-{g}", "selectedRows") for g in GROUP_KEYS],
+          Input("nw-history-clear", "n_clicks"), prevent_initial_call=True)
+def clear_account(_n):
+    """'Show all accounts' deselects every account grid, which reverts the chart via pick_account."""
+    return [[] for _ in GROUP_KEYS]

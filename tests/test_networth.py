@@ -95,8 +95,10 @@ def test_empty_database(tmp_path, monkeypatch, demo):
     from finance.app.main import create_app
     from finance.app.pages import networth as page
     create_app()
-    kpis, hist, subtitle, *_ = page.update("12m", None, None, None, "dark", 0)
-    assert kpis[0].children[1].children == "-" and "first sync" in subtitle
+    kpis, comp, *_ = page.update("12m", None, None, None, "dark", 0)
+    assert kpis[0].children[1].children == "-"
+    hist, subtitle, clear_style = page.update_history(None, "12m", None, None, None, "dark", 0)
+    assert "first sync" in subtitle and clear_style == {"display": "none"}
 
 
 def test_page_callbacks(demo):
@@ -109,20 +111,22 @@ def test_page_callbacks(demo):
     n = len(keys)
     for theme in ("light", "dark"):
         out = page.update("12m", None, None, None, theme, 0)
-        kpis, hist, subtitle, monthly, comp, dates_style = out[:6]
-        row_data = dict(zip(keys, out[6:6 + n]))
-        titles = dict(zip(keys, out[6 + n:6 + 2 * n]))
-        styles = dict(zip(keys, out[6 + 2 * n:6 + 3 * n]))
-        assert len(kpis) == 4 and dates_style == {"display": "none"}
+        kpis, comp, dates_style = out[:3]
+        row_data = dict(zip(keys, out[3:3 + n]))
+        titles = dict(zip(keys, out[3 + n:3 + 2 * n]))
+        styles = dict(zip(keys, out[3 + 2 * n:3 + 3 * n]))
+        assert len(kpis) == 4 and dates_style == {"display": "none"} and comp.data
+        assert row_data["cash"] and styles["cash"] == {} and "Cash" in titles["cash"]
+        # the main chart: full stacked net worth when nothing is selected
+        hist, subtitle, clear_style = page.update_history(None, "12m", None, None, None, theme, 0)
         names = [t.name for t in hist.data if t.showlegend is not False]  # skip glow underlays/edges
         assert names[-1] == "Net worth" and "Cash" in names and "Loans and other debt" in names
-        assert monthly.data and comp.data
-        assert row_data["cash"] and styles["cash"] == {} and "Cash" in titles["cash"]
+        assert clear_style == {"display": "none"}
+        # selecting an account swaps the chart to that account and shows the "Show all accounts" button
         acct = row_data["cash"][0]
-        fig, title = page.update_account(acct, "12m", None, None, theme, 0)
-        assert fig.data and title.startswith(acct["account"])
-        assert "click" in page.update_account(None, "12m", None, None, theme, 0)[1].lower()
+        afig, asub, aclear = page.update_history(acct, "12m", None, None, None, theme, 0)
+        assert afig.data and aclear == {} and acct["account"] in asub.children[0].children
     custom = page.update("custom", "2026-03-01", "2026-03-31", ["DEMO-CHK"], "light", 0)
-    assert custom[5] == {}  # dates picker visible for a custom range
-    assert sum(len(custom[6 + i]) for i in range(n)) == 1  # only DEMO-CHK across all group lists
+    assert custom[2] == {}  # dates picker visible for a custom range
+    assert sum(len(custom[3 + i]) for i in range(n)) == 1  # only DEMO-CHK across all group lists
     assert services.read(lambda s: s.scalar(select(Account.type).where(Account.id == "DEMO-CHK"))) == "checking"

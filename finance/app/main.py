@@ -44,7 +44,10 @@ def sidebar() -> html.Aside:
     return html.Aside([
         html.Div([html.Div("PF", className="brand-mark"), html.Span("Personal Finance")], className="brand"),
         dbc.Nav([
-            dbc.NavLink([html.I(className=f"bi {icon}"), html.Span(label)], href=path, active="exact")
+            # get_relative_path prefixes the href with Dash's requests_pathname_prefix so links work
+            # both locally ("/cashflow") and behind the Home Assistant ingress path.
+            dbc.NavLink([html.I(className=f"bi {icon}"), html.Span(label)],
+                        href=dash.get_relative_path(path), active="exact")
             for path, label, icon in NAV
         ], vertical=True, className="side-nav"),
         html.Div([
@@ -127,8 +130,21 @@ def create_app() -> dash.Dash:
 
     app.clientside_callback(THEME_JS, Output("theme", "data"), Input("theme-switch", "value"))
 
+    def _route_key(path: str | None) -> str:
+        """Browser pathname -> app route. Behind HA ingress the pathname carries the ingress prefix
+        (Dash's requests_pathname_prefix); strip it so routes match '/', '/cashflow', ... as usual."""
+        prefix = app.config.requests_pathname_prefix or "/"
+        p = path or "/"
+        if prefix != "/":
+            if p == prefix.rstrip("/"):  # ingress root without the trailing slash
+                return "/"
+            if p.startswith(prefix):
+                p = "/" + p[len(prefix):]
+        return p or "/"
+
     @app.callback(Output("page", "children"), Output("page-title", "children"), Input("url", "pathname"))
     def route(path):
+        path = _route_key(path)
         title = TITLES.get(path, "Not found")
         if path == "/":
             return networth_page.layout(), title
@@ -142,7 +158,8 @@ def create_app() -> dash.Dash:
             return investments_page.layout(), title
         if path == "/optimizer":
             return optimizer_page.layout(), title
-        return dbc.Alert(["Page not found. ", dcc.Link("Go to Net worth", href="/")], color="secondary"), title
+        return dbc.Alert(["Page not found. ", dcc.Link("Go to Net worth", href=dash.get_relative_path("/"))],
+                         color="secondary"), title
 
     @app.callback(
         Output("sync-status", "children"), Output("sync-btn", "children"), Output("sync-btn", "disabled"),

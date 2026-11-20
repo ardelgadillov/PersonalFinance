@@ -27,6 +27,12 @@ def get_engine(db_url: str | None = None) -> Engine:
             cur = dbapi_conn.cursor()
             cur.execute("PRAGMA foreign_keys=ON")
             cur.execute("PRAGMA journal_mode=WAL")
+            # Wait (up to 30s) for a competing writer instead of failing immediately with
+            # "database is locked". WAL lets readers run during a write, but two writers still
+            # serialize; without a busy timeout the second one errors out at once. This happens
+            # when the optimizer's fund-price cache write overlaps another callback or the daily
+            # sync. On slower HA storage the wait also smooths over longer write transactions.
+            cur.execute("PRAGMA busy_timeout=30000")
             cur.close()
 
         _engines[db_url] = engine

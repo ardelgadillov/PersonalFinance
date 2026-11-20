@@ -1,4 +1,8 @@
-"""Cash flow page: income vs spending by month, spending by category, category trend, Sankey, merchants."""
+"""Cash flow page: income vs spending by month, spending by category, Sankey, transactions.
+
+Clicking a category bar (or a Sankey category) shows that category's monthly bars in the top chart
+and filters the transactions table; "Clear filter" returns to income vs spending for everything.
+"""
 from __future__ import annotations
 
 import datetime as dt
@@ -15,6 +19,7 @@ from finance import transactions as tx
 from finance.app.charts import CONFIG, base_layout, colors, empty_figure, glow, rgba
 from finance.app.components import alert, editable, grid, message, money_col, panel
 from finance.categorize import description_key
+from finance.models import INVESTMENT_TYPES
 
 PERIODS = ["month", "last_month", "12m", "ytd", "last_year", "24m", "all", "custom"]
 PERSIST = {"persistence": True, "persistence_type": "local"}
@@ -66,19 +71,15 @@ def layout() -> html.Div:
         panel("Where the money goes", _graph("cf-sankey", 460),
               subtitle="Income sources on the left, spending categories on the right. Click a category to filter "
                        "the transactions below."),
-        dbc.Row([
-            dbc.Col(panel("Spending by category", html.Div(_graph("cf-categories", 420), className="scroll-y"),
-                          subtitle="Click a bar to see its trend and filter the transactions below."), lg=6),
-            dbc.Col(panel("Category trend",
-                          dcc.Dropdown(id="cf-trend-cat", clearable=False, className="mb-2", **PERSIST),
-                          _graph("cf-trend", 360)), lg=6),
-        ], className="g-3"),
+        panel("Spending by category", html.Div(_graph("cf-categories", 420), className="scroll-y"),
+              subtitle="Click a bar to show that category in the chart above and filter the transactions below."),
         panel("Transactions", txn_actions, html.Div(className="mb-2"),
               grid("cf-txn-grid", _txn_cols(names), [], height=480,
                    dashGridOptions={"rowSelection": {"mode": "singleRow", "checkboxes": False,
                                                      "enableClickSelection": True}}),
-              subtitle="All transactions in the period (or the selected category). Edit a category in place, or "
-                       "select a row and Create rule. Manual edits are never changed by syncs or rules."),
+              subtitle="Cash-flow transactions in the period (or the selected category): transfers and "
+                       "investment accounts are excluded. Edit a category in place, or select a row and Create "
+                       "rule. Manual edits are never changed by syncs or rules."),
         _rule_modal(),
     ])
 
@@ -141,8 +142,8 @@ def _load(period, start, end, accounts):
     return df, cf.month_range(lo, hi, df)
 
 
-def _prev_cumnet(period, months, accounts):
-    """Running net of the comparison period, aligned by position (None when not applicable).
+def _prev_period(period, months, accounts):
+    """(prev_months, prev_df) for the comparison window, or None when not applicable.
 
     For a period whose length is not a whole number of years (e.g. year-to-date), the equal-length window
     just before it would land on different calendar months (YTD January would compare against last February),
@@ -158,8 +159,25 @@ def _prev_cumnet(period, months, accounts):
         prev_start = months[0] - pd.offsets.MonthBegin(span)  # first day of the month `span` months earlier
         prev_months = pd.date_range(prev_start, prev_end, freq="MS")
     lo, hi = prev_months[0].date(), (prev_months[-1] + pd.offsets.MonthEnd(0)).date()
-    prev_df = services.read(cf.load_flows, lo, hi, accounts or None)
+    return prev_months, services.read(cf.load_flows, lo, hi, accounts or None)
+
+
+def _prev_cumnet(period, months, accounts):
+    """Running net of the comparison period, aligned by position (None when not applicable)."""
+    pv = _prev_period(period, months, accounts)
+    if pv is None:
+        return None
+    prev_months, prev_df = pv
     return cf.monthly(prev_df, prev_months)["net"].cumsum()
+
+
+def _prev_cumcat(category, period, months, accounts):
+    """Running total of one category over the comparison period, aligned by position (or None)."""
+    pv = _prev_period(period, months, accounts)
+    if pv is None:
+        return None
+    prev_months, prev_df = pv
+    return cf.category_trend(prev_df, category, prev_months)["amount"].cumsum()
 
 
 # --------------------------------------------------------------------------- figures
@@ -183,9 +201,8 @@ def monthly_figure(m, prev_cum, theme) -> go.Figure:
                                  mode="lines", line={"color": rgba(c["neutral"], 0.4), "width": 2},
                                  hovertemplate="%{y:$,.0f}<extra>Net, last period</extra>"))
     traces.append(go.Scatter(
-        x=m["month"], y=cum, name="Net (cumulative)", mode="lines+markers", customdata=list(zip(m["net"], rate)),
+        x=m["month"], y=cum, name="Net (cumulative)", mode="lines", customdata=list(zip(m["net"], rate)),
         line={"color": c["text"], "width": 2},
-        marker={"size": 8, "color": c["text"], "line": {"color": c["surface"], "width": 2}},
         hovertemplate="%{y:$,.0f} running<br>%{customdata[0]:$,.0f} this month "
                       "(savings rate %{customdata[1]})<extra>Net</extra>"))
     fig = go.Figure(traces)
@@ -220,27 +237,36 @@ def category_figure(cats, theme) -> go.Figure:
     return fig
 
 
-def trend_figure(trend, category: str | None, kind: str, theme, daily: bool = False) -> go.Figure:
+def category_trend_figure(trend, prev_x, prev_y, category: str | None, kind: str, theme,
+                          daily: bool = False, x_range=None) -> go.Figure:
+    """One category over time: per-period bars, its running cumulative, and the previous period's cumulative
+    (same shape as the income/spending chart, so the chart reads the same way whichever is selected)."""
     c = colors(theme)
     if not category or trend.empty or not trend["amount"].any():
-        return empty_figure(theme, "Choose a category", height=360)
+        return empty_figure(theme, "Choose a category", height=340)
     color = c["income"] if kind == "income" else c["spending"]
-    avg = float(trend["amount"].mean())
-    fig = go.Figure(go.Bar(x=trend["month"], y=trend["amount"], name=category,
-                           marker={"color": color, "cornerradius": 4},
-                           hovertemplate=("%{x|%a %b %d}" if daily else "%{x|%B %Y}")
-                           + "<br>%{y:$,.0f}<extra></extra>"))
-    fig.add_hline(y=avg, line={"color": c["muted"], "width": 2, "dash": "dash"},
-                  annotation={"text": f"{'Daily average' if daily else 'Average'} {_money(avg)}", "font": {"color": c["muted"]},
-                              "xanchor": "left", "x": 0, "yanchor": "bottom"})
-    fig.update_layout(**base_layout(theme, height=360, showlegend=False, bargap=0.3))
+    x = trend["month"]
+    cum = trend["amount"].cumsum()
+    prev_label = "Cumulative, last month" if daily else "Cumulative, last period"
+    traces = [go.Bar(x=x, y=trend["amount"], name=category, marker={"color": color, "cornerradius": 4},
+                     hovertemplate=("%{x|%a %b %d}" if daily else "%{x|%B %Y}") + "<br>%{y:$,.0f}<extra></extra>")]
+    if prev_x is not None and len(prev_x):  # previous period's running total, in grey
+        traces.append(go.Scatter(x=list(prev_x), y=list(prev_y), name=prev_label, mode="lines",
+                                 line={"color": rgba(c["neutral"], 0.4), "width": 2},
+                                 hovertemplate="%{y:$,.0f}<extra>" + prev_label + "</extra>"))
+    traces.append(go.Scatter(x=x, y=cum, name="Cumulative", mode="lines", line={"color": c["text"], "width": 2},
+                             hovertemplate="%{y:$,.0f} running<extra>Cumulative</extra>"))
+    fig = go.Figure(traces)
+    fig.update_layout(**base_layout(theme, height=340, bargap=0.3, hovermode="x unified"))
     if daily:
-        fig.update_xaxes(tickformat="%b %d", dtick=7 * 86400000, tickangle=0)
+        fig.update_xaxes(tickformat="%b %d", dtick=7 * 86400000, tickangle=0, hoverformat="%a %b %d")
+        if x_range is not None:
+            fig.update_xaxes(range=x_range)
     else:
         step = 1 if len(trend) <= 6 else 2 if len(trend) <= 14 else 3 if len(trend) <= 30 else 6
-        fig.update_xaxes(tickformat="%b '%y", dtick=f"M{step}", tickangle=0)
+        fig.update_xaxes(tickformat="%b '%y", dtick=f"M{step}", tickangle=0, hoverformat="%B %Y")
     fig.update_yaxes(tickprefix="$", tickformat=",.0f")
-    glow(fig, theme)
+    glow(fig, theme)  # bloom on the bars and the cumulative line
     return fig
 
 
@@ -261,9 +287,8 @@ def daily_figure(cur, prev, today: dt.date, month_end: dt.date, theme) -> go.Fig
         go.Scatter(x=prev_x, y=prev["cum_net"], name=prev_label, mode="lines",
                    line={"color": rgba(c["neutral"], 0.4), "width": 2},
                    hovertemplate="%{y:$,.0f}<extra>" + prev_label + "</extra>"),
-        go.Scatter(x=so_far["day"], y=so_far["cum_net"], name=f"Net so far, {today:%B}", mode="lines+markers",
+        go.Scatter(x=so_far["day"], y=so_far["cum_net"], name=f"Net so far, {today:%B}", mode="lines",
                    line={"color": c["text"], "width": 2},
-                   marker={"size": 8, "color": c["text"], "line": {"color": c["surface"], "width": 2}},
                    hovertemplate="%{y:$,.0f}<extra>Net so far</extra>"),
     ])
     fig.update_layout(**base_layout(theme, height=340, barmode="group", bargap=0.25, bargroupgap=0.06,
@@ -303,14 +328,11 @@ def sankey_figure(data: dict, theme) -> go.Figure:
 
 
 # --------------------------------------------------------------------------- callbacks
-@callback(Output("cf-kpis", "children"), Output("cf-monthly", "figure"), Output("cf-categories", "figure"),
-          Output("cf-categories", "style"), Output("cf-sankey", "figure"),
-          Output("cf-trend-cat", "options"), Output("cf-trend-cat", "value"), Output("cf-dates-col", "style"),
-          Output("cf-monthly-title", "children"), Output("cf-monthly-subtitle", "children"),
+@callback(Output("cf-kpis", "children"), Output("cf-categories", "figure"),
+          Output("cf-categories", "style"), Output("cf-sankey", "figure"), Output("cf-dates-col", "style"),
           Input("cf-period", "value"), Input("cf-dates", "start_date"), Input("cf-dates", "end_date"),
-          Input("cf-accounts", "value"), Input("theme", "data"), Input("sync-version", "data"),
-          State("cf-trend-cat", "value"))
-def update(period, start, end, accounts, theme, _version, trend_cat):
+          Input("cf-accounts", "value"), Input("theme", "data"), Input("sync-version", "data"))
+def update(period, start, end, accounts, theme, _version):
     df, months = _load(period, start, end, accounts)
     k = cf.kpis(df, months)
     rate = k["savings_rate"]
@@ -321,64 +343,68 @@ def update(period, start, end, accounts, theme, _version, trend_cat):
         _stat("Savings rate", f"{rate:.0%}" if rate is not None else "-", "of income"),
         _stat("Average spending", _money(k["avg_spending"]), f"per month over {k['months']} month(s)"),
     ]
-    if period in DAILY_PERIODS:
+    if period == "month":
+        anchor = dt.date.today()
+        kpis[-1] = _stat("Average spending", _money(k["spending"] / anchor.day),
+                         f"per day, {anchor.day} day(s) so far")
+    cat_fig = category_figure(cf.by_category(df, "expense", len(months)), theme)
+    return (kpis, cat_fig, {"height": f"{cat_fig.layout.height}px"},
+            sankey_figure(cf.sankey(df), theme), {} if period == "custom" else {"display": "none"})
+
+
+@callback(Output("cf-monthly", "figure"), Output("cf-monthly-title", "children"),
+          Output("cf-monthly-subtitle", "children"),
+          Input("cf-txn-cat", "data"),
+          Input("cf-period", "value"), Input("cf-dates", "start_date"), Input("cf-dates", "end_date"),
+          Input("cf-accounts", "value"), Input("theme", "data"), Input("sync-version", "data"))
+def update_monthly(category, period, start, end, accounts, theme, _version):
+    """Top chart: income vs spending, or (when a category is selected) that category's bars over time."""
+    df, months = _load(period, start, end, accounts)
+    daily = period in DAILY_PERIODS
+    if daily:
         anchor = dt.date.today() if period == "month" else (dt.date.today().replace(day=1) - dt.timedelta(days=1))
         first, month_end = cf.month_bounds(anchor)
         cutoff = dt.date.today() if period == "month" else month_end  # a full month when it is last month
-        if period == "month":
-            kpis[-1] = _stat("Average spending", _money(k["spending"] / anchor.day),
-                             f"per day, {anchor.day} day(s) so far")
+    if category:  # a single category clicked in "Spending by category" or the Sankey
+        kinds = df.loc[df["category"] == category, "kind"] if not df.empty else []
+        kind = kinds.iloc[0] if len(kinds) else "expense"
+        if daily:
+            trend = cf.category_daily(df, category, first, cutoff)
+            prev_lo, prev_hi = cf.previous_month(anchor)
+            prev = cf.category_daily(services.read(cf.load_flows, prev_lo, prev_hi, accounts or None),
+                                     category, prev_lo, prev_hi)
+            dom = prev["month"].dt.day
+            keep = dom <= month_end.day  # last month's running total on this month's day numbers
+            prev_x = [pd.Timestamp(anchor.replace(day=int(d))) for d in dom[keep]]
+            prev_y = list(prev["amount"].cumsum()[keep.values])
+            x_range = [pd.Timestamp(first) - pd.Timedelta(hours=12),
+                       pd.Timestamp(month_end) + pd.Timedelta(hours=12)]
+            fig = category_trend_figure(trend, prev_x, prev_y, category, kind, theme, daily=True, x_range=x_range)
+            title = f"{category} by day"
+        else:
+            trend = cf.category_trend(df, category, months)
+            prev_cum = _prev_cumcat(category, period, months, accounts)
+            prev_x = prev_y = None
+            if prev_cum is not None and len(prev_cum):
+                k = min(len(prev_cum), len(trend))
+                prev_x, prev_y = list(trend["month"].iloc[:k]), list(prev_cum[:k])
+            fig = category_trend_figure(trend, prev_x, prev_y, category, kind, theme)
+            title = f"{category} by month"
+        return (fig, title, "Showing one category with its running cumulative (and last period's in grey). "
+                "Use Clear filter (below) to return to income and spending.")
+    if daily:
         prev_lo, prev_hi = cf.previous_month(anchor)
         prev = cf.daily(services.read(cf.load_flows, prev_lo, prev_hi, accounts or None), prev_lo, prev_hi)
-        main_fig = daily_figure(cf.daily(df, first, month_end), prev, cutoff, month_end, theme)
+        fig = daily_figure(cf.daily(df, first, month_end), prev, cutoff, month_end, theme)
         title = "Income and spending by day"
         subtitle = ("Transfers between your accounts are excluded. The lines are the running net (income minus "
                     "spending) this month and, in grey, the previous month on the same day.")
     else:
-        prev_cum = _prev_cumnet(period, months, accounts)
-        main_fig = monthly_figure(cf.monthly(df, months), prev_cum, theme)
+        fig = monthly_figure(cf.monthly(df, months), _prev_cumnet(period, months, accounts), theme)
         title = "Income and spending by month"
         subtitle = ("Transfers excluded. The line is the running (cumulative) net; the grey line is the previous "
                     "equivalent period for comparison.")
-    spend = cf.by_category(df, "expense", len(months))
-    income = cf.by_category(df, "income", len(months))
-    cat_fig = category_figure(spend, theme)
-    options = ([{"label": f"{c} (spending)", "value": c} for c in spend.loc[spend["total"] > 0, "category"]]
-               + [{"label": f"{c} (income)", "value": c} for c in income.loc[income["total"] > 0, "category"]])
-    values = [o["value"] for o in options]
-    if trend_cat not in values:
-        trend_cat = values[0] if values else None
-    return (kpis, main_fig, cat_fig,
-            {"height": f"{cat_fig.layout.height}px"}, sankey_figure(cf.sankey(df), theme),
-            options, trend_cat, {} if period == "custom" else {"display": "none"},
-            title, subtitle)
-
-
-@callback(Output("cf-trend", "figure"),
-          Input("cf-trend-cat", "value"), Input("cf-period", "value"), Input("cf-dates", "start_date"),
-          Input("cf-dates", "end_date"), Input("cf-accounts", "value"), Input("theme", "data"),
-          Input("sync-version", "data"))
-def update_trend(category, period, start, end, accounts, theme, _version):
-    df, months = _load(period, start, end, accounts)
-    if not category or df.empty:
-        return trend_figure(df, None, "expense", theme)
-    kinds = df.loc[df["category"] == category, "kind"]
-    kind = kinds.iloc[0] if len(kinds) else "expense"
-    if period in DAILY_PERIODS:
-        anchor = dt.date.today() if period == "month" else (dt.date.today().replace(day=1) - dt.timedelta(days=1))
-        first, month_end = cf.month_bounds(anchor)
-        cutoff = dt.date.today() if period == "month" else month_end
-        return trend_figure(cf.category_daily(df, category, first, cutoff), category, kind, theme, daily=True)
-    return trend_figure(cf.category_trend(df, category, months), category, kind, theme)
-
-
-@callback(Output("cf-trend-cat", "value", allow_duplicate=True), Input("cf-categories", "clickData"),
-          prevent_initial_call=True)
-def pick_category(click):
-    try:
-        return click["points"][0]["y"]
-    except (TypeError, KeyError, IndexError):
-        return no_update
+    return fig, title, subtitle
 
 
 # --------------------------------------------------------------------------- transactions table (filter + edit)
@@ -415,10 +441,14 @@ def load_cf_txns(period, start, end, accounts, category, _refresh, _version):
         cat_ids = [ids[category]] if category in ids else []
     else:
         cat_ids = []
-    f = tx.TxnFilter(start=lo, end=hi, account_ids=accounts or [], category_ids=cat_ids)
+    # Cash-flow scope: drop transfers/contributions; with no explicit account filter also drop hidden and
+    # investment-type accounts so the table matches the charts (cash accounts and credit cards only).
+    f = tx.TxnFilter(start=lo, end=hi, account_ids=accounts or [], category_ids=cat_ids,
+                     exclude_transfers=True, exclude_hidden=not accounts,
+                     exclude_types=() if accounts else tuple(INVESTMENT_TYPES))
     rows = services.read(tx.query, f)
     label = (f"Filtered to {category} ({len(rows):,})" if category
-             else f"All transactions in the period ({len(rows):,})")
+             else f"All cash-flow transactions in the period ({len(rows):,})")
     return rows, label
 
 

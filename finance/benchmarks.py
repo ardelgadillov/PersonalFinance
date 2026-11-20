@@ -154,6 +154,10 @@ def ensure_funds(s: Session, symbols: list[str], start: dt.date, end: dt.date, f
     Returns {symbol: error} for the ones without data."""
     errors = {}
     now = time.time() if now is None else now
+    # Fetch everything from the network first, then write. Keeping the (slow) downloads out of the
+    # write transaction means the SQLite write lock is held only for the fast inserts, so overlapping
+    # callbacks/syncs wait briefly instead of piling up on a long-held lock (see PRAGMA busy_timeout).
+    fetched: list[tuple[str, list]] = []
     for symbol in symbols:
         lo, hi = s.execute(select(func.min(FundPrice.date), func.max(FundPrice.date))
                            .where(FundPrice.symbol == symbol)).one()
@@ -173,6 +177,8 @@ def ensure_funds(s: Session, symbols: list[str], start: dt.date, end: dt.date, f
         if not rows:
             errors[symbol] = f"No prices returned for {symbol}"
             continue
+        fetched.append((symbol, rows))
+    for symbol, rows in fetched:
         for i in range(0, len(rows), 500):  # SQLite caps the number of bound parameters per statement
             chunk = rows[i:i + 500]
             stmt = insert(FundPrice).values([{"symbol": symbol, "date": d, "adj_close": c} for d, c in chunk])

@@ -102,14 +102,15 @@ def test_page_callbacks(demo):
     create_app()
     assert page.layout()
     for theme in ("light", "dark"):
-        out = page.update("12m", None, None, None, theme, 0, None)
-        kpis, monthly, cats, cat_style, sankey, options, trend_cat, dates_style, title, _ = out
-        assert len(kpis) == 5 and monthly.data and cats.data and sankey.data
-        assert trend_cat == options[0]["value"] and dates_style == {"display": "none"} and "month" in title
-        assert page.update_trend(trend_cat, "12m", None, None, None, theme, 0).data
-    empty = page.update("custom", "1990-01-01", "1990-02-01", None, "light", 0, "Groceries")
-    assert empty[6] is None and empty[7] == {}
-    assert page.pick_category({"points": [{"y": "Groceries"}]}) == "Groceries"
+        kpis, cats, cat_style, sankey, dates_style = page.update("12m", None, None, None, theme, 0)
+        assert len(kpis) == 5 and cats.data and sankey.data and dates_style == {"display": "none"}
+        # top chart: income vs spending by default, one category when selected
+        monthly, title, _sub = page.update_monthly(None, "12m", None, None, None, theme, 0)
+        assert monthly.data and "month" in title
+        groc, gtitle, _ = page.update_monthly("Groceries", "12m", None, None, None, theme, 0)
+        assert groc.data and gtitle.startswith("Groceries")
+    empty = page.update("custom", "1990-01-01", "1990-02-01", None, "light", 0)
+    assert empty[4] == {}  # dates picker visible for a custom range
     assert tx.PERIODS["last_year"]
 
 
@@ -131,15 +132,17 @@ def test_daily_and_this_month_view(demo):
     from finance.app.main import create_app
     from finance.app.pages import cashflow as page
     create_app()
-    out = page.update("month", None, None, None, "dark", 0, None)
-    fig, title = out[1], out[8]
+    kpis = page.update("month", None, None, None, "dark", 0)[0]
+    fig, title, _sub = page.update_monthly(None, "month", None, None, None, "dark", 0)
     assert title == "Income and spending by day"
     names = [t.name for t in fig.data if t.showlegend is not False]  # skip glow_lines underlays
     assert names[:2] == ["Income", "Spending"] and any(n.startswith("Net so far") for n in names[2:])
-    assert "per day" in str(out[0][-1])
-    if out[6]:
-        trend = page.update_trend(out[6], "month", None, None, None, "dark", 0)
-        assert trend.layout.xaxis.tickformat == "%b %d"
+    assert "per day" in str(kpis[-1])
+    mdf, _mn = page._load("month", None, None, None)
+    if not mdf.empty and (mdf["kind"] == "expense").any():
+        cat = cf.by_category(mdf, "expense").iloc[0]["category"]
+        tfig, ttitle, _ = page.update_monthly(cat, "month", None, None, None, "dark", 0)
+        assert tfig.layout.xaxis.tickformat == "%b %d" and ttitle.endswith("by day")
 
 
 def test_last_month_and_cumulative_net(demo):
@@ -148,12 +151,11 @@ def test_last_month_and_cumulative_net(demo):
     create_app()
 
     # "Last month" uses the day-by-day view
-    out = page.update("last_month", None, None, None, "light", 0, None)
-    assert out[8] == "Income and spending by day"
-    assert page.update_trend(out[6], "last_month", None, None, None, "light", 0).data
+    _fig, title, _sub = page.update_monthly(None, "last_month", None, None, None, "light", 0)
+    assert title == "Income and spending by day"
 
     # 12-month view: the Net line is cumulative, with a grey previous-period line overlaid
-    monthly = page.update("12m", None, None, None, "light", 0, None)[1]
+    monthly = page.update_monthly(None, "12m", None, None, None, "light", 0)[0]
     names = [t.name for t in monthly.data if t.showlegend is not False]
     assert "Net (cumulative)" in names and "Net, last period" in names
     cum = next(t for t in monthly.data if t.name == "Net (cumulative)")

@@ -119,5 +119,38 @@ tests/                       # fixture JSON/CSV, no real data
    Investments page performance chart was left as-is (it already narrows to the selected period; it can only
    start at the first sync, since balance/holding history begins there). (`optimizer.py::ticker_performance`.)
 
-initial page shows Page Not found. Go to Net worth in http://homeassistant.local:8123/local_personalfinance
-cashflow should all transactions related to cash flow (cash accounts and credit cards), not contributions or investments
+# Homeassistant test/changes
+1. Is it possible to add an icon that shows in the app in homeassistant?
+2. I also noticed that the app in homeassistant is also a little bit slower, what are the possible reasons for that?
+3. initial page shows Page Not found. It shows Go to Net worth in http://homeassistant.local:8123/local_personalfinance
+4. In the cellphone, the KPIs on top use half of the screen in all different tabs. I like the main KPIs but I would like
+   if they don't use so much space
+5. Networth page. I think Change by month and Account history charts are not needed. When selecting an account on the table
+   the networth overtime chart should show only that account
+6. Cashflow page.
+   - I do not like the dots in the Net so far line. Show the line without the dots. 
+   - the transaction table should show all transactions related to cash flow (cash accounts and credit cards), 
+     not contributions or investments
+   - The category trend chart is not needed. Instead, when selecting a category in the spending by category use the chart
+     on top to show the bars for that category
+7. Optimization page. Sometimes there is an error when opening the optimization page. I have put the log in local_personalfinance_2026-11-20T15-11-03.155Z.log
+   that shows the error
+
+## Addressed 2026-11-20
+1. ✅ Add-on icon: added `icon.png` + `logo.png` at the repo root (HA auto-detects them for the store/add-on
+   page); the sidebar entry already uses `panel_icon: mdi:finance`. Replace the two PNGs with your own art any
+   time. (Answer: the sidebar icon was always configurable; the card/logo just needed the image files.)
+2. ℹ️ Slower in HA: most likely (a) ingress proxying every asset/callback through the Supervisor, (b) slower
+   host storage (SD card / small VM) making SQLite writes slow, and (c) the DB-lock stalls from item 7. The
+   item-7 fix removes the stalls; faster storage for the data dir is the main lever otherwise.
+3. ✅ "Page not found" on open: behind ingress `dcc.Location` reports the path *with* the ingress prefix, so the
+   router never matched `/`. Routing now strips the request prefix (`main._route_key`) and nav/links use
+   `get_relative_path`. Needs confirming in a live HA instance.
+4. ✅ Mobile KPIs: compact two-column chips (smaller padding/fonts, sub-hints hidden) under 860px in `style.css`.
+5. ✅ Net worth page: removed "Change by month" and "Account history"; "Composition" is now full width; clicking
+   an account in the table shows only that account in the top chart, with a "Show all accounts" button to revert.
+6. ✅ Cash flow page: Net line drawn without dots; the Transactions table is scoped to cash-flow transactions
+   (transfers/contributions and investment-type accounts excluded unless an account is explicitly selected);
+   "Category trend" removed — clicking a category now shows it in the top chart, Clear filter restores the view.
+7. ✅ Optimizer "database is locked": added `PRAGMA busy_timeout=30000` so a competing writer waits, and moved
+   the fund-price network fetches out of the write transaction so the SQLite write lock is held only briefly.

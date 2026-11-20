@@ -167,3 +167,8 @@ tests/                       # fixture JSON/CSV, no real data
    (`benchmarks.fund_prices_cached`) and only downloads a ticker that was just added to a menu and is not
    yet cached. `PRAGMA busy_timeout` only makes a writer wait on a lock; it does not write anything and was
    never the cause of the empty optimizer.
+4. ✅ Optimizer resilience: log DB updates (SimpleFIN new/updated counts - a long-standing wrong-field bug
+   logged 0/0 - and fund-price tickers/rows) and errors incl. rate limits (HTTP 429). Funds with under a
+   year of price history are now auto-excluded (`optimizer.select_funds`) so the analysis still runs, and
+   the page names the excluded fund(s) and how little history each has; the "not enough history" message now
+   distinguishes "prices not downloaded yet" from "funds do not overlap enough".

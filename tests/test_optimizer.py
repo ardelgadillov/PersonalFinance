@@ -85,6 +85,21 @@ def test_optimizer_math():
     assert op.cumulative(r).iloc[-1] == pytest.approx((1 + r).prod() - 1)
 
 
+def test_select_funds_drops_short_history():
+    prices = fake_prices(SYMS)  # ~14 years each
+    recent = prices.index[-60:]  # a fund launched ~3 months ago: prices only on the most recent days
+    prices["NEWX"] = pd.Series(np.linspace(10, 11, len(recent)), index=recent).reindex(prices.index)
+    prices["NODATA"] = np.nan
+    kept, excluded = op.select_funds(prices)
+    assert set(kept.columns) == set(SYMS)  # the five full-history funds survive
+    names = {sym for sym, _ in excluded}
+    assert names == {"NEWX", "NODATA"} and dict(excluded)["NODATA"] == 0 and dict(excluded)["NEWX"] < 252
+    # on the kept funds the optimizer runs on their full common window, not the short fund's ~60 days
+    kept_analysis = op.analyze(kept, 5, 0.0, 0.4, 3)
+    assert kept_analysis is not None and set(kept_analysis.symbols) == set(SYMS)
+    assert (kept_analysis.end - kept_analysis.start).days > 365  # a real multi-year window
+
+
 def test_walk_forward_never_uses_future_prices():
     prices = fake_prices(end=dt.date(2020, 12, 31))
     wf = op.walk_forward(prices, train_years=3, rf=0.0, cap=0.5, fixed={"Equal weight": np.full(5, 0.2)})

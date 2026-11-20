@@ -268,6 +268,20 @@ class Analysis:
     walk: WalkForward | None
 
 
+MIN_HISTORY_DAYS = 252  # a fund needs at least ~1 trading year of prices to take part in the optimization
+
+
+def select_funds(prices: pd.DataFrame, min_days: int = MIN_HISTORY_DAYS
+                 ) -> tuple[pd.DataFrame, list[tuple[str, int]]]:
+    """Keep only funds with at least `min_days` trading days of price history, so one barely-launched fund
+    cannot shrink the funds' common window below what the optimizer needs. Returns (kept prices, excluded)
+    where `excluded` is [(symbol, trading days available)] sorted shortest first (0 = no prices at all)."""
+    counts = {c: int(prices[c].notna().sum()) for c in prices.columns}
+    kept = [c for c in prices.columns if counts[c] >= min_days]
+    excluded = sorted(((c, n) for c, n in counts.items() if n < min_days), key=lambda t: (t[1], t[0]))
+    return prices[kept], excluded
+
+
 def analyze(prices: pd.DataFrame, lookback_years: int, rf: float, cap: float, train_years: int,
             current: dict[str, float] | None = None) -> Analysis | None:
     """prices: adjusted closes (all history available). In-sample = last `lookback_years` of the common

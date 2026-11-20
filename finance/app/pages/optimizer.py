@@ -151,7 +151,8 @@ def _analysis(db_url: str, account: str, lookback: int, cap: float, rf: float, t
     """(Analysis or None, info dict). Cached: the slider and both callbacks reuse one computation."""
     items = services.read(fm.menu, account)
     symbols = [i["symbol"] for i in items]
-    info = {"names": {i["symbol"]: i["name"] for i in items}, "errors": {}, "outside": [], "symbols": symbols}
+    info = {"names": {i["symbol"]: i["name"] for i in items}, "errors": {}, "outside": [], "symbols": symbols,
+            "excluded": []}
     if len(symbols) < 2:
         return None, info
     today = dt.date.today()
@@ -160,12 +161,22 @@ def _analysis(db_url: str, account: str, lookback: int, cap: float, rf: float, t
     prices, errors = services.write(bm.fund_prices_cached, symbols,
                                     get_settings().demo, today - dt.timedelta(days=365 * HISTORY_YEARS))
     info["errors"] = errors
-    priced = [sym for sym in symbols if sym in prices.columns and prices[sym].notna().any()]
+    have = [sym for sym in symbols if sym in prices.columns and prices[sym].notna().any()]
+    if len(have) < 2:
+        return None, info
+    # Drop funds with too little history so one barely-launched fund does not block the whole analysis;
+    # keep everything if dropping would leave fewer than two funds (better a short window than no result).
+    kept, excluded = op.select_funds(prices[have])
+    if kept.shape[1] >= 2:
+        info["excluded"] = excluded
+    else:
+        kept = prices[have]
+    priced = list(kept.columns)
     mix, outside = services.read(fm.current_mix, account, priced)
     info["outside"] = outside
     if len(priced) < 2:
         return None, info
-    return op.analyze(prices[priced], lookback, rf, cap, train, mix), info
+    return op.analyze(kept, lookback, rf, cap, train, mix), info
 
 
 def _get(account, lookback, cap, rf, train, refresh, version):
@@ -246,11 +257,24 @@ def lines_figure(series: list[tuple[str, pd.Series, str, str]], theme, height=34
     return fig
 
 
+def _history_label(days: int) -> str:
+    if days <= 0:
+        return "no price history"
+    if days < 252:
+        return f"only {max(1, round(days / 21))} month(s) of history"
+    return f"only {days / 252:.1f} year(s) of history"
+
+
 def _messages(a: op.Analysis | None, info: dict) -> list:
     out = []
     if info["errors"]:
         out.append(alert("Some funds have no price history and were left out", "warning",
                          [msg for msg in info["errors"].values()], duration=None))
+    if info.get("excluded"):
+        out.append(alert("Some funds were left out: too little price history to optimize (need at least 1 year)",
+                         "warning",
+                         [f"{info['names'].get(sym) or sym} ({sym}): {_history_label(days)}"
+                          for sym, days in info["excluded"]], duration=None))
     if info["outside"]:
         out.append(alert("Holdings that are not in the fund menu are left out of the current mix", "secondary",
                          [f"{sym}: {share:.1%} of the account" for sym, share in info["outside"]], duration=None))
@@ -333,8 +357,14 @@ def run_analysis(account, lookback, cap, rf, train, refresh, version, theme):
     a, info = _get(account, lookback, cap, rf, train, refresh, version)
     c = colors(theme)
     if a is None:
-        need = ("Add at least two funds with a ticker to the fund menu." if len(info["symbols"]) < 2 else
-                "Not enough price history for the funds in the menu.")
+        usable = [s for s in info["symbols"] if s not in info["errors"]]
+        if len(info["symbols"]) < 2:
+            need = "Add at least two funds with a ticker to the fund menu."
+        elif len(usable) < 2:
+            need = ("The fund prices have not been downloaded yet (see above) - this can happen right after "
+                    "startup or when the provider rate-limits us. They refresh automatically; try again shortly.")
+        else:
+            need = "The funds do not share enough overlapping price history to run the optimization."
         msg = _messages(None, info) + [alert(need, "secondary", duration=None)]
         return msg, 0, 1, None, None, empty_figure(theme, height=340), [], None
     lo, hi = a.min_variance.ret, op.max_return(a.mu, a.cap)

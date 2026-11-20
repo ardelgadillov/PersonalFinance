@@ -118,3 +118,6 @@ tests/                       # fixture JSON/CSV, no real data
    cumulative total return over the optimizer's in-sample window on the same dividend-adjusted basis. The
    Investments page performance chart was left as-is (it already narrows to the selected period; it can only
    start at the first sync, since balance/holding history begins there). (`optimizer.py::ticker_performance`.)
+
+initial page shows Page Not found. Go to Net worth in http://homeassistant.local:8123/local_personalfinance
+cashflow should all transactions related to cash flow (cash accounts and credit cards), not contributions or investments

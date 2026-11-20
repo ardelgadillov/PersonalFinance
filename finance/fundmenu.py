@@ -11,6 +11,13 @@ class FundMenuError(ValueError):
     pass
 
 
+def accounts_with_data(s: Session) -> set[str]:
+    """Account ids worth showing in the optimizer: those with holdings or a fund menu."""
+    held = set(s.scalars(select(HoldingSnapshot.account_id).distinct()))
+    menued = set(s.scalars(select(FundMenuItem.account_id).distinct()))
+    return held | menued
+
+
 def tracked_symbols(s: Session) -> list[str]:
     """Every ticker worth caching prices for: all fund-menu symbols plus the symbols in each account's
     latest holdings. Used to warm the fund-price cache ahead of the optimizer."""

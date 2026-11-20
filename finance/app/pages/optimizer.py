@@ -45,7 +45,9 @@ def _label(text, control, width=None):
 
 
 def layout() -> html.Div:
-    accounts = services.read(inv.investment_accounts)
+    # Only accounts that actually have something to optimize (current holdings or a fund menu).
+    with_data = services.read(fm.accounts_with_data)
+    accounts = [a for a in services.read(inv.investment_accounts) if a["id"] in with_data]
     default = next((a["id"] for a in accounts if a["type"] == "retirement"), accounts[0]["id"] if accounts else None)
     settings_row = dbc.Row([
         _label("Account", dbc.Select(id="opt-account", value=default, size="sm", **PERSIST, options=[

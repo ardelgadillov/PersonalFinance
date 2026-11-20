@@ -13,6 +13,7 @@ original Markowitz notebook (yfinance 'Adj Close').
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import random
 import time
 from collections.abc import Callable
@@ -34,6 +35,8 @@ BENCHMARKS = {
 }
 DEFAULT = "SPY"
 REFETCH_HOURS = 6
+
+log = logging.getLogger(__name__)
 
 Fetcher = Callable[[str, dt.date, dt.date], list[tuple[dt.date, float]]]
 _last_attempt: dict[str, float] = {}
@@ -74,6 +77,44 @@ def fetch_yahoo(symbol: str, start: dt.date, end: dt.date) -> list[tuple[dt.date
 def fetch_yahoo_adjusted(symbol: str, start: dt.date, end: dt.date) -> list[tuple[dt.date, float]]:
     """Daily dividend-adjusted closes (total return)."""
     return _yahoo_chart(symbol, start, end, adjusted=True)
+
+
+ManyFetcher = Callable[[list[str], dt.date, dt.date], dict[str, list[tuple[dt.date, float]]]]
+
+
+def fetch_many_adjusted(symbols: list[str], start: dt.date, end: dt.date) -> dict[str, list[tuple[dt.date, float]]]:
+    """Dividend-adjusted daily closes for several tickers in ONE download (yfinance batches the request),
+    returned as {symbol: [(date, adj_close), ...]}. A symbol Yahoo does not know simply has no entry.
+
+    One request for the whole fund menu is far gentler on Yahoo's rate limit than one request per ticker,
+    which is what used to trip the HTTP 429 "Too Many Requests" errors."""
+    symbols = [s for s in symbols if s]
+    if not symbols:
+        return {}
+    try:
+        # yfinance treats `end` as exclusive; add a day to include closes on `end` itself.
+        data = yf.download(tickers=symbols, start=start, end=end + dt.timedelta(days=1), interval="1d",
+                           auto_adjust=False, actions=False, group_by="ticker", threads=True, progress=False)
+    except Exception as exc:  # noqa: BLE001 - yfinance raises assorted network/parse errors; funnel them
+        raise BenchmarkError(f"Could not download prices: {exc}") from exc
+    out: dict[str, list[tuple[dt.date, float]]] = {}
+    if data is None or data.empty:
+        return out
+    multi = isinstance(data.columns, pd.MultiIndex)
+    for sym in symbols:
+        try:
+            col = data[sym]["Adj Close"] if multi else data["Adj Close"]
+        except (KeyError, IndexError):
+            continue  # ticker not in the response (unknown symbol): reported as "no prices" by the caller
+        rows = [(ts.date(), round(float(c), 4)) for ts, c in col.items() if pd.notna(c)]
+        if rows:
+            out[sym] = rows
+    return out
+
+
+def fake_many_adjusted(symbols: list[str], start: dt.date, end: dt.date) -> dict[str, list[tuple[dt.date, float]]]:
+    """Deterministic batched fund prices (demo mode and tests): the fake per-symbol series, keyed by symbol."""
+    return {s: fake_adjusted(s, start, end) for s in symbols if s}
 
 
 def fake_prices(symbol: str, start: dt.date, end: dt.date) -> list[tuple[dt.date, float]]:
@@ -206,6 +247,89 @@ def load_funds(s: Session, symbols: list[str], start: dt.date, end: dt.date,
     """(adjusted closes from `start`, {symbol: error}). Writes the cache (caller commits)."""
     errors = ensure_funds(s, symbols, start, end, fake_adjusted if demo else fetch_yahoo_adjusted)
     return fund_prices(s, symbols, start), errors
+
+
+def _upsert_fund(s: Session, symbol: str, rows: list[tuple[dt.date, float]]) -> None:
+    for i in range(0, len(rows), 500):  # SQLite caps the number of bound parameters per statement
+        chunk = rows[i:i + 500]
+        stmt = insert(FundPrice).values([{"symbol": symbol, "date": d, "adj_close": c} for d, c in chunk])
+        s.execute(stmt.on_conflict_do_update(index_elements=["symbol", "date"],
+                                             set_={"adj_close": stmt.excluded.adj_close}))
+
+
+def refresh_fund_prices(s: Session, symbols: list[str], demo: bool, *, full_years: int = 10,
+                        recent_days: int = 40, now: float | None = None) -> dict[str, str]:
+    """Fill/refresh the cached adjusted closes for `symbols` with as few downloads as possible (caller commits).
+
+    A symbol with no cached rows (brand new ticker, or the first run) is backfilled with `full_years` of
+    history; a symbol already cached only has its last `recent_days` refreshed. Each group is ONE batched
+    download, so the usual case - all tickers already cached - is a single request. Returns {symbol: error}
+    for the ones that returned no data. A new symbol that fails is not retried for REFETCH_HOURS, so a bad
+    ticker in the menu does not cause repeated downloads; the daily refresh (>24h apart) still retries it."""
+    symbols = sorted({(x or "").upper() for x in symbols if x and x.strip()})
+    if not symbols:
+        return {}
+    fetch_many: ManyFetcher = fake_many_adjusted if demo else fetch_many_adjusted
+    today = dt.date.today()
+    now = time.time() if now is None else now
+    cached = {sym for sym, in s.execute(select(FundPrice.symbol).where(FundPrice.symbol.in_(symbols))
+                                        .group_by(FundPrice.symbol)).all()}
+    errors: dict[str, str] = {}
+    new = []
+    for sym in (x for x in symbols if x not in cached):  # backfill, with a per-symbol retry backoff
+        key = "fund:" + sym
+        if key in _last_attempt and now - _last_attempt[key] < REFETCH_HOURS * 3600:
+            errors[sym] = f"No prices for {sym} (the download failed recently; it is retried in a few hours)"
+        else:
+            _last_attempt[key] = now
+            new.append(sym)
+    old = [x for x in symbols if x in cached]  # already have history: just top up recent days
+    for group, start, kind in ((new, today - dt.timedelta(days=365 * full_years), "backfill (%dy)" % full_years),
+                               (old, today - dt.timedelta(days=recent_days), "recent")):
+        if not group:
+            continue
+        try:
+            rows_by = fetch_many(group, start, today)
+        except BenchmarkError as exc:  # network/parse failure for the whole batch
+            log.warning("yfinance download failed for %d ticker(s) [%s]: %s", len(group), kind, exc)
+            for sym in group:
+                errors[sym] = str(exc)
+            continue
+        wrote, rows_written = [], 0
+        for sym in group:
+            rows = rows_by.get(sym) or []
+            if rows:
+                _upsert_fund(s, sym, rows)
+                wrote.append(sym)
+                rows_written += len(rows)
+            elif sym in new:  # a top-up that returns nothing (e.g. a holiday week) is not an error
+                errors[sym] = f"No prices returned for {sym}"
+        if wrote:  # DB updated: say what changed
+            log.info("Fund prices updated [%s]: %d ticker(s), %d row(s): %s",
+                     kind, len(wrote), rows_written, ", ".join(wrote[:15]) + (" ..." if len(wrote) > 15 else ""))
+        empty = [x for x in group if not rows_by.get(x)]
+        if empty and len(empty) == len(group):  # nothing came back at all -> almost always a rate limit / outage
+            log.warning("yfinance returned no data for all %d ticker(s) [%s] - likely rate-limited (HTTP 429) "
+                        "or offline; will retry on the next scheduled refresh: %s",
+                        len(group), kind, ", ".join(empty[:15]))
+        elif empty:
+            log.warning("yfinance returned no data for %d of %d ticker(s) [%s]: %s",
+                        len(empty), len(group), kind, ", ".join(empty[:15]))
+    return errors
+
+
+def fund_prices_cached(s: Session, symbols: list[str], demo: bool, start: dt.date,
+                       now: float | None = None) -> tuple[pd.DataFrame, dict[str, str]]:
+    """Adjusted closes from `start`, read from the cache; only symbols with nothing cached (a ticker just
+    added to the menu) are fetched, then re-read. The scheduled/startup warm keeps everything else current,
+    so opening the optimizer does not download anything. (adjusted closes, {symbol: error})."""
+    df = fund_prices(s, symbols, start)
+    missing = [x for x in symbols if x not in df.columns or not df[x].notna().any()]
+    errors: dict[str, str] = {}
+    if missing:
+        errors = refresh_fund_prices(s, missing, demo, now=now)
+        df = fund_prices(s, symbols, start)
+    return df, errors
 
 
 def closes(s: Session, symbol: str, start: dt.date | None = None, end: dt.date | None = None) -> pd.Series:

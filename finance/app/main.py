@@ -210,6 +210,11 @@ def run(host: str = "127.0.0.1", port: int = 8050, debug: bool = False, startup_
     hour = os.getenv("FINANCE_DAILY_SYNC_HOUR", "").strip()
     if hour:
         sync_manager.schedule_daily(int(hour), settings=settings)
+    # Fund prices for the optimizer: one batched download now (so the cache is ready by the time the
+    # optimizer tab is opened) and again daily at FINANCE_PRICE_REFRESH_HOUR (04:00 by default).
+    if not settings.demo:
+        sync_manager.warm_prices(settings)
+        sync_manager.schedule_daily_prices(int(os.getenv("FINANCE_PRICE_REFRESH_HOUR", "4")), settings=settings)
     banner = (f"Personal Finance running at http://{host}:{port}  (data: {settings.data_dir}"
               f"{', DEMO' if settings.demo else ''})")
     print(banner)

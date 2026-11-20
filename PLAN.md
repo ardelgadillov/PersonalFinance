@@ -154,3 +154,16 @@ tests/                       # fixture JSON/CSV, no real data
    "Category trend" removed — clicking a category now shows it in the top chart, Clear filter restores the view.
 7. ✅ Optimizer "database is locked": added `PRAGMA busy_timeout=30000` so a competing writer waits, and moved
    the fund-price network fetches out of the write transaction so the SQLite write lock is held only briefly.
+
+## Addressed 2026-11-21
+1. ✅ Mobile KPIs: three compact chips per row under 860px (`style.css`).
+2. ✅ Cash flow: the Sankey ("Where the money goes") now sits above "Income and spending by month".
+3. ✅ Optimizer price cache (fixes the recurring Yahoo HTTP 429 and the empty optimizer): the app no longer
+   downloads prices when the optimizer tab opens. `finance/prices.py` + `benchmarks.refresh_fund_prices`
+   fetch every tracked ticker (each account's latest holdings + fund menus + benchmarks) in ONE batched
+   `yfinance` download — ten years for a ticker with nothing cached, recent days for the rest. It runs once
+   on app start (`SyncManager.warm_prices`, background thread) and daily at `FINANCE_PRICE_REFRESH_HOUR`
+   (04:00 default; `SyncManager.schedule_daily_prices`). The optimizer reads from the cache
+   (`benchmarks.fund_prices_cached`) and only downloads a ticker that was just added to a menu and is not
+   yet cached. `PRAGMA busy_timeout` only makes a writer wait on a lock; it does not write anything and was
+   never the cause of the empty optimizer.

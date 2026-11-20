@@ -143,11 +143,11 @@ body { background: var(--app-bg); color: var(--app-text); font-size: 14px; }
   .sidebar-footer { margin: 0 0 0 auto; border: none; padding: 0; }
   .main { margin-left: 0; }
   .topbar, .content { padding-left: 16px; padding-right: 16px; }
-  /* KPI chips: two tight columns so the strip does not eat half the phone screen. */
-  .stat-strip { gap: 8px; }
-  .stat-chip { flex: 1 1 calc(50% - 4px); min-width: calc(50% - 4px); padding: 6px 10px; box-shadow: none; }
-  .stat-chip .stat-value { font-size: 15px; margin-top: 0; }
-  .stat-chip .stat-label { font-size: 10px; letter-spacing: .3px; }
+  /* KPI chips: three tight columns so the strip does not eat the phone screen. */
+  .stat-strip { gap: 6px; }
+  .stat-chip { flex: 1 1 calc(33.333% - 4px); min-width: calc(33.333% - 4px); padding: 6px 8px; box-shadow: none; }
+  .stat-chip .stat-value { font-size: 14px; margin-top: 0; }
+  .stat-chip .stat-label { font-size: 9px; letter-spacing: .2px; }
   .stat-chip .stat-hint { display: none; }
 }
 

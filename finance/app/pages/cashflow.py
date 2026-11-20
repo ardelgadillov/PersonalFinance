@@ -66,11 +66,11 @@ def layout() -> html.Div:
         message("cf-txn-msg"),
         filters,
         html.Div(id="cf-kpis", className="stat-strip mb-3"),
-        panel(html.Span("Income and spending by month", id="cf-monthly-title"), _graph("cf-monthly", 340),
-              subtitle=html.Span(id="cf-monthly-subtitle")),
         panel("Where the money goes", _graph("cf-sankey", 460),
               subtitle="Income sources on the left, spending categories on the right. Click a category to filter "
                        "the transactions below."),
+        panel(html.Span("Income and spending by month", id="cf-monthly-title"), _graph("cf-monthly", 340),
+              subtitle=html.Span(id="cf-monthly-subtitle")),
         panel("Spending by category", html.Div(_graph("cf-categories", 420), className="scroll-y"),
               subtitle="Click a bar to show that category in the chart above and filter the transactions below."),
         panel("Transactions", txn_actions, html.Div(className="mb-2"),

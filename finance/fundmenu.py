@@ -1,7 +1,7 @@
 """Fund menus: the funds an account's plan (401k, HSA, ...) lets you invest in, used by the optimizer."""
 from __future__ import annotations
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
 from finance.models import FundMenuItem, HoldingSnapshot
@@ -9,6 +9,19 @@ from finance.models import FundMenuItem, HoldingSnapshot
 
 class FundMenuError(ValueError):
     pass
+
+
+def tracked_symbols(s: Session) -> list[str]:
+    """Every ticker worth caching prices for: all fund-menu symbols plus the symbols in each account's
+    latest holdings. Used to warm the fund-price cache ahead of the optimizer."""
+    menu = s.scalars(select(FundMenuItem.symbol)).all()
+    latest = (select(HoldingSnapshot.account_id, func.max(HoldingSnapshot.date).label("d"))
+              .group_by(HoldingSnapshot.account_id).subquery())
+    held = s.scalars(
+        select(HoldingSnapshot.symbol).join(
+            latest, and_(HoldingSnapshot.account_id == latest.c.account_id, HoldingSnapshot.date == latest.c.d))
+        .where(HoldingSnapshot.symbol.is_not(None))).all()
+    return sorted({(x or "").upper() for x in (*menu, *held) if x and x.strip()})
 
 
 def menu(s: Session, account_id: str) -> list[dict]:

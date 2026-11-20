@@ -155,8 +155,10 @@ def _analysis(db_url: str, account: str, lookback: int, cap: float, rf: float, t
     if len(symbols) < 2:
         return None, info
     today = dt.date.today()
-    prices, errors = services.write(bm.load_funds, symbols, today - dt.timedelta(days=365 * HISTORY_YEARS),
-                                    today, get_settings().demo)
+    # Read prices from the cache the startup/daily warm fills; only a ticker that was just added to the menu
+    # (nothing cached yet) is downloaded here, so opening the tab normally fetches nothing.
+    prices, errors = services.write(bm.fund_prices_cached, symbols,
+                                    get_settings().demo, today - dt.timedelta(days=365 * HISTORY_YEARS))
     info["errors"] = errors
     priced = [sym for sym in symbols if sym in prices.columns and prices[sym].notna().any()]
     mix, outside = services.read(fm.current_mix, account, priced)
@@ -436,7 +438,7 @@ def ticker_performance(symbol, bench, account, lookback, cap, rf, train, refresh
     # The market benchmark (dividend-adjusted closes, like the funds), aligned to the same window.
     bench = bench or bm.DEFAULT
     blabel = bm.BENCHMARKS.get(bench, bench)
-    bprices, _berr = services.write(bm.load_funds, [bench], a.start.date(), a.end.date(), get_settings().demo)
+    bprices, _berr = services.write(bm.fund_prices_cached, [bench], get_settings().demo, a.start.date())
     bench_ri = bm.return_index(bprices[bench].dropna(), idx) if bench in bprices.columns else None
     if bench_ri is not None:
         series.append((blabel, bench_ri, c["muted"], "dash"))

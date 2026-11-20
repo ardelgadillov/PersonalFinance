@@ -177,3 +177,7 @@ tests/                       # fixture JSON/CSV, no real data
    concurrent calls - so it ran ~3x in parallel, holding the GIL and stalling other pages. Replaced it with a
    locked, bounded cache that computes each key once and makes the other callers wait for and reuse it
    (`optimizer._compute_analysis`), and raised waitress to 8 threads (`FINANCE_SERVER_THREADS`).
+6. ✅ Optimizer progress/timing: each analysis is timed and logged (`prices Xs + optimize Ys = Zs total`),
+   the time is shown in the Portfolios subtitle ("Analysis computed in N.Ns"), and the charts are wrapped in
+   `dcc.Loading` so a spinner shows while the analysis runs instead of a blank panel. Only the accounts with
+   holdings or a fund menu are listed in the account dropdown (`fundmenu.accounts_with_data`).

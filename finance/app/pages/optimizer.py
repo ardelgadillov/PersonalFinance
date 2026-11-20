@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
+import logging
 import threading
+import time
 from collections import OrderedDict
 
 import dash_bootstrap_components as dbc
@@ -21,6 +23,7 @@ from finance.app.charts import CONFIG, base_layout, colors, empty_figure
 from finance.app.components import alert, editable, grid, panel
 from finance.config import get_settings
 
+log = logging.getLogger(__name__)
 PERSIST = {"persistence": True, "persistence_type": "local"}
 HISTORY_YEARS = 16  # enough for a 10-year window plus walk-forward training
 PCT = {"function": "params.value == null ? '' : d3.format('.1%')(params.value)"}
@@ -36,8 +39,11 @@ def _pct_col(field, header, signed=False, **kw):
             "type": "rightAligned", **kw}
 
 
-def _graph(id_: str, height: int) -> dcc.Graph:
-    return dcc.Graph(id=id_, config=CONFIG, style={"height": f"{height}px"})
+def _graph(id_: str, height: int) -> dcc.Loading:
+    # Spinner over the chart while its callback runs, so a slow analysis shows progress instead of a blank
+    # panel; delay_show avoids a flicker when the result is already cached and returns instantly.
+    return dcc.Loading(dcc.Graph(id=id_, config=CONFIG, style={"height": f"{height}px"}),
+                       type="default", delay_show=250)
 
 
 def _label(text, control, width=None):
@@ -193,10 +199,11 @@ _analysis.cache_clear = _analysis_cache_clear  # keep the lru_cache-style API us
 
 
 def _compute_analysis(account: str, lookback: int, cap: float, rf: float, train: int):
+    t0 = time.perf_counter()
     items = services.read(fm.menu, account)
     symbols = [i["symbol"] for i in items]
     info = {"names": {i["symbol"]: i["name"] for i in items}, "errors": {}, "outside": [], "symbols": symbols,
-            "excluded": []}
+            "excluded": [], "timing": None}
     if len(symbols) < 2:
         return None, info
     today = dt.date.today()
@@ -204,6 +211,7 @@ def _compute_analysis(account: str, lookback: int, cap: float, rf: float, train:
     # (nothing cached yet) is downloaded here, so opening the tab normally fetches nothing.
     prices, errors = services.write(bm.fund_prices_cached, symbols,
                                     get_settings().demo, today - dt.timedelta(days=365 * HISTORY_YEARS))
+    t_prices = time.perf_counter()
     info["errors"] = errors
     have = [sym for sym in symbols if sym in prices.columns and prices[sym].notna().any()]
     if len(have) < 2:
@@ -220,7 +228,12 @@ def _compute_analysis(account: str, lookback: int, cap: float, rf: float, train:
     info["outside"] = outside
     if len(priced) < 2:
         return None, info
-    return op.analyze(kept, lookback, rf, cap, train, mix), info
+    a = op.analyze(kept, lookback, rf, cap, train, mix)
+    total, fetch, analyze = time.perf_counter() - t0, t_prices - t0, time.perf_counter() - t_prices
+    info["timing"] = {"total": total, "prices": fetch, "analyze": analyze, "funds": len(priced)}
+    log.info("Optimizer analysis [%s]: %d fund(s), prices %.2fs + optimize %.2fs = %.2fs total",
+             account, len(priced), fetch, analyze, total)
+    return a, info
 
 
 def _get(account, lookback, cap, rf, train, refresh, version):
@@ -459,8 +472,10 @@ def update_selected(target, account, lookback, cap, rf, train, refresh, version,
         stats.append({"portfolio": n, "ret": p.ret, "vol": p.vol, "sharpe": p.sharpe, "cagr": perf["cagr"],
                       "max_dd": perf["max_drawdown"]})
     years = (a.end - a.start).days / 365.25
+    t = info.get("timing")
+    timing = f" Analysis computed in {t['total']:.1f}s." if t else ""
     stats_sub = (f"In sample: {a.start:%b %d, %Y} to {a.end:%b %d, %Y} ({years:.1f} years). Sharpe = (expected "
-                 f"return - {a.rf:.2%}) / volatility.")
+                 f"return - {a.rf:.2%}) / volatility.{timing}")
     names = info["names"]
     weights = sorted([{"symbol": s, "name": names.get(s, ""),
                        "current": float(ports[CURRENT].weights[i]) if CURRENT in ports else None,

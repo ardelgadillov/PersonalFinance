@@ -172,3 +172,8 @@ tests/                       # fixture JSON/CSV, no real data
    year of price history are now auto-excluded (`optimizer.select_funds`) so the analysis still runs, and
    the page names the excluded fund(s) and how little history each has; the "not enough history" message now
    distinguishes "prices not downloaded yet" from "funds do not overlap enough".
+5. ✅ Optimizer slow / blocked the whole app on first open: the page fires three callbacks at once that all
+   needed the same heavy Markowitz + walk-forward computation, and `functools.lru_cache` does not dedupe
+   concurrent calls - so it ran ~3x in parallel, holding the GIL and stalling other pages. Replaced it with a
+   locked, bounded cache that computes each key once and makes the other callers wait for and reuse it
+   (`optimizer._compute_analysis`), and raised waitress to 8 threads (`FINANCE_SERVER_THREADS`).

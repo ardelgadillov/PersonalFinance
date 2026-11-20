@@ -227,4 +227,6 @@ def run(host: str = "127.0.0.1", port: int = 8050, debug: bool = False, startup_
         # Production serving (incl. the HA add-on): waitress is a small, multi-threaded, pure-Python
         # WSGI server - no compiled deps, so it runs the same on Windows and all HA architectures.
         from waitress import serve
-        serve(app.server, host=host, port=port)  # app.server is the underlying Flask WSGI app
+        # A page can fire several callbacks at once (the optimizer fires three); more worker threads than
+        # waitress's default of 4 keep one slow page from starving requests for the others.
+        serve(app.server, host=host, port=port, threads=int(os.getenv("FINANCE_SERVER_THREADS", "8")))

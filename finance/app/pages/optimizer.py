@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
-import functools
+import threading
+from collections import OrderedDict
 
 import dash_bootstrap_components as dbc
 import numpy as np
@@ -145,10 +146,51 @@ def layout() -> html.Div:
 
 
 # --------------------------------------------------------------------------- data
-@functools.lru_cache(maxsize=8)
-def _analysis(db_url: str, account: str, lookback: int, cap: float, rf: float, train: int, _refresh, _version,
-              _day: dt.date):
-    """(Analysis or None, info dict). Cached: the slider and both callbacks reuse one computation."""
+# The optimizer page fires three callbacks at once (analysis, selected mix, ticker chart), all needing the
+# same heavy Markowitz + walk-forward computation. A plain lru_cache does not dedupe *concurrent* calls, so
+# the first open would run the (CPU-heavy, GIL-holding) optimization up to three times in parallel and stall
+# the whole app. This bounded cache computes each key exactly once and makes the other callers wait for and
+# reuse that result, keeping the server responsive.
+_CACHE_MAX = 8
+_analysis_cache: "OrderedDict[tuple, tuple]" = OrderedDict()
+_analysis_cache_lock = threading.Lock()
+_analysis_key_locks: dict[tuple, threading.Lock] = {}
+
+
+def _analysis(db_url: str, account: str, lookback: int, cap: float, rf: float, train: int, refresh, version,
+              day: dt.date):
+    """(Analysis or None, info dict), computed once per key and shared by all three page callbacks."""
+    key = (db_url, account, lookback, cap, rf, train, refresh, version, day)
+    with _analysis_cache_lock:
+        if key in _analysis_cache:
+            _analysis_cache.move_to_end(key)
+            return _analysis_cache[key]
+        key_lock = _analysis_key_locks.setdefault(key, threading.Lock())
+    with key_lock:  # only one caller computes this key; others wait here, then hit the cache below
+        with _analysis_cache_lock:
+            if key in _analysis_cache:
+                _analysis_cache.move_to_end(key)
+                return _analysis_cache[key]
+        result = _compute_analysis(account, lookback, cap, rf, train)
+        with _analysis_cache_lock:
+            _analysis_cache[key] = result
+            _analysis_cache.move_to_end(key)
+            while len(_analysis_cache) > _CACHE_MAX:
+                _analysis_cache.popitem(last=False)
+            _analysis_key_locks.pop(key, None)
+        return result
+
+
+def _analysis_cache_clear() -> None:
+    with _analysis_cache_lock:
+        _analysis_cache.clear()
+        _analysis_key_locks.clear()
+
+
+_analysis.cache_clear = _analysis_cache_clear  # keep the lru_cache-style API used by the tests
+
+
+def _compute_analysis(account: str, lookback: int, cap: float, rf: float, train: int):
     items = services.read(fm.menu, account)
     symbols = [i["symbol"] for i in items]
     info = {"names": {i["symbol"]: i["name"] for i in items}, "errors": {}, "outside": [], "symbols": symbols,
